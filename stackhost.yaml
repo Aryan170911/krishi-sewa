@@ -9,7 +9,7 @@ commands:
   package: ""
   build:
     - "pip install -r requirements.txt"
-  start: "gunicorn api:app --bind 0.0.0.0:$PORT --workers 2 --timeout 60"
+  start: "python api.py"
 
 repository:
   branch: "main"

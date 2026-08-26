@@ -929,7 +929,7 @@ function renderShopPage() {
 
 function renderProductPage() {
   const product = state.currentProduct;
-  if (!product) return renderShopPage();
+  if (!product) return render404Page();
 
   const discount = product.originalPrice && product.originalPrice > product.price
     ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
@@ -1833,8 +1833,14 @@ function handleHashChange() {
     case 'about':
       navigateTo('about');
       break;
+    case '404':
+      state.currentPage = '404';
+      renderApp();
+      break;
     default:
-      navigateTo('home');
+      state.currentPage = '404';
+      window.location.hash = '#404';
+      renderApp();
   }
 }
 
@@ -2116,6 +2122,20 @@ function showToast(message) {
   }, 3000);
 }
 
+function render404Page() {
+  return `
+    <main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-section-gap flex flex-col items-center text-center">
+      <span class="material-symbols-outlined text-outline text-8xl mb-6">search_off</span>
+      <h1 class="font-headline-xl text-headline-xl text-primary mb-3">Page Not Found</h1>
+      <p class="font-body-lg text-body-lg text-on-surface-variant mb-8 max-w-md">The page you're looking for doesn't exist or the product may have been removed. Let's get you back to the harvest.</p>
+      <div class="flex gap-3">
+        <button class="bg-primary text-on-primary px-6 py-3 rounded-lg font-semibold hover:bg-primary-container transition-colors" onclick="navigateTo('home')">Go Home</button>
+        <button class="border border-outline-variant px-6 py-3 rounded-lg font-semibold hover:bg-surface-variant transition-colors" onclick="navigateTo('shop')">Browse Shop</button>
+      </div>
+    </main>
+  `;
+}
+
 // ============================================
 // MAIN RENDER FUNCTION
 // ============================================
@@ -2151,8 +2171,11 @@ function renderApp() {
     case 'about':
       pageContent = renderAboutPage();
       break;
+    case '404':
+      pageContent = render404Page();
+      break;
     default:
-      pageContent = renderHomePage();
+      pageContent = render404Page();
   }
 
   app.innerHTML = renderNav() + pageContent + renderFooter() + renderMobileBottomNav();

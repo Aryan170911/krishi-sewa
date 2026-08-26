@@ -8,9 +8,15 @@ import os
 import json
 import random
 import string
+import time
+import logging
 from datetime import datetime, timezone
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, g
 from flask_cors import CORS
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except: pass
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.join(BASE_DIR, "krishi-sewa-frontend")
@@ -19,7 +25,55 @@ ORDERS_FILE = os.path.join(DATA_DIR, "orders.json")
 PRODUCTS_FILE = os.path.join(DATA_DIR, "products.json")
 
 app = Flask(__name__, static_folder=FRONTEND_DIR)
-CORS(app)
+# CORS - allow all in dev, restrict via CORS_ORIGIN env in prod
+cors_origin = os.environ.get("CORS_ORIGIN", "*")
+if cors_origin == "*":
+    CORS(app)
+else:
+    CORS(app, origins=cors_origin.split(","), supports_credentials=True)
+
+# Logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("krishi")
+
+# Simple in-memory rate limit for orders (10/min per IP)
+_rate_store = {}
+def check_rate_limit(ip, max_req=10, window=60):
+    now = time.time()
+    lst = _rate_store.get(ip, [])
+    lst = [t for t in lst if now - t < window]
+    if len(lst) >= max_req:
+        return False
+    lst.append(now)
+    _rate_store[ip] = lst
+    return True
+
+@app.before_request
+def before_request_log():
+    g.start_time = time.time()
+    logger.info(f"{request.method} {request.path} from {request.remote_addr}")
+
+@app.after_request
+def add_security_headers(resp):
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+    resp.headers["X-XSS-Protection"] = "1; mode=block"
+    resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # Allow Tailwind CDN and Google Fonts
+    if request.path.startswith("/api/"):
+        resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+@app.errorhandler(404)
+def not_found(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "API endpoint not found"}), 404
+    return send_from_directory(FRONTEND_DIR, "index.html")
+
+@app.errorhandler(500)
+def internal_error(e):
+    logger.error(f"500 {request.path}: {e}")
+    return jsonify({"error": "Internal server error"}), 500
 
 # ============ Seed Data (same as server/data.js) ============
 seed_products = [
@@ -296,6 +350,22 @@ def save_orders(orders):
 
 products = load_products()
 
+AUDIT_FILE = os.path.join(DATA_DIR, "audit.json")
+def load_audit():
+    if not os.path.exists(AUDIT_FILE):
+        with open(AUDIT_FILE, "w", encoding="utf-8") as f: json.dump([], f)
+        return []
+    try:
+        with open(AUDIT_FILE, "r", encoding="utf-8") as f: return json.load(f)
+    except: return []
+def log_audit(action, details, ip=""):
+    try:
+        logs = load_audit()
+        logs.append({"timestamp": datetime.now(timezone.utc).isoformat(), "action": action, "details": details, "ip": ip, "user": os.environ.get("ADMIN_USER","admin")})
+        if len(logs) > 200: logs = logs[-200:]
+        with open(AUDIT_FILE, "w", encoding="utf-8") as f: json.dump(logs, f, indent=2, ensure_ascii=False)
+    except Exception as e: logger.error(f"Audit log failed: {e}")
+
 def generate_order_id():
     return "#KS-" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
@@ -309,14 +379,42 @@ def calculate_total(items):
 # ============ API Routes ============
 @app.route("/api/health")
 def health():
-    return jsonify({"status": "ok", "message": "Krishi Sewa Python API running", "timestamp": datetime.now(timezone.utc).isoformat()})
+    return jsonify({
+        "status": "ok",
+        "message": "Krishi Sewa Python API running",
+        "version": "1.0.0",
+        "env": os.environ.get("FLASK_ENV", "production"),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "products": len(products),
+        "orders": len(load_orders())
+    })
+
+@app.route("/api")
+def api_root():
+    return jsonify({
+        "name": "Krishi Sewa Foundation API",
+        "version": "1.0.0",
+        "endpoints": ["/api/health","/api/products","/api/categories","/api/events","/api/orders","/api/admin/stats","/admin"]
+    })
 
 @app.route("/api/admin/login", methods=["POST"])
 def admin_login():
+    if not check_rate_limit(request.remote_addr or "login", max_req=5, window=60):
+        return jsonify({"error": "Too many login attempts, try again later"}), 429
     data = request.get_json() or {}
-    if data.get("username") == "admin" and data.get("password") == "admin123":
-        return jsonify({"token": "krishi-admin-token-2026", "username": "admin"})
+    admin_user = os.environ.get("ADMIN_USER", "admin")
+    admin_pass = os.environ.get("ADMIN_PASS", "admin123")
+    admin_token = os.environ.get("ADMIN_TOKEN", "krishi-admin-token-2026")
+    if data.get("username") == admin_user and data.get("password") == admin_pass:
+        logger.info(f"Admin login success from {request.remote_addr}")
+        return jsonify({"token": admin_token, "username": admin_user})
+    logger.warning(f"Admin login failed from {request.remote_addr} user={data.get('username')}")
     return jsonify({"error": "Invalid credentials. Try admin / admin123"}), 401
+
+@app.route("/api/admin/audit")
+def admin_audit():
+    logs = load_audit()
+    return jsonify(list(reversed(logs[-50:])))
 
 @app.route("/api/admin/stats")
 def admin_stats():
@@ -385,6 +483,7 @@ def create_product():
     }
     products.append(new_prod)
     save_products(products)
+    log_audit("product:create", {"id": new_id, "name": new_prod["name"]}, request.remote_addr or "")
     return jsonify(new_prod), 201
 
 @app.route("/api/products/<int:pid>", methods=["PUT"])
@@ -398,6 +497,7 @@ def update_product(pid):
     if "price" in data: prod["price"]=float(data["price"])
     if "originalPrice" in data: prod["originalPrice"]=float(data["originalPrice"])
     save_products(products)
+    log_audit("product:update", {"id": pid, "name": prod.get("name")}, request.remote_addr or "")
     return jsonify(prod)
 
 @app.route("/api/products/<int:pid>", methods=["DELETE"])
@@ -407,6 +507,7 @@ def delete_product(pid):
     if idx==-1: return jsonify({"error":"Product not found"}),404
     removed = products.pop(idx)
     save_products(products)
+    log_audit("product:delete", {"id": pid, "name": removed.get("name")}, request.remote_addr or "")
     return jsonify({"message":"Deleted","product":removed})
 
 @app.route("/api/products/<int:pid>/stock", methods=["PATCH"])
@@ -416,6 +517,7 @@ def toggle_stock(pid):
     data = request.get_json() or {}
     prod["inStock"] = bool(data.get("inStock"))
     save_products(products)
+    log_audit("product:stock", {"id": pid, "inStock": prod["inStock"]}, request.remote_addr or "")
     return jsonify(prod)
 
 @app.route("/api/categories")
@@ -453,16 +555,34 @@ def get_order(oid):
 
 @app.route("/api/orders", methods=["POST"])
 def create_order():
+    # Rate limit: 10 orders/min per IP
+    if not check_rate_limit(request.remote_addr or "unknown", max_req=10, window=60):
+        return jsonify({"error":"Too many order attempts, please wait"}), 429
     data = request.get_json() or {}
     items = data.get("items")
     address = data.get("address")
     paymentMethod = data.get("paymentMethod")
     if not items or not isinstance(items, list) or len(items)==0:
         return jsonify({"error":"Items array required"}),400
+    if len(items) > 20:
+        return jsonify({"error":"Too many items (max 20)"}),400
     if not address or not all(k in address for k in ["fullName","phone","address","state","district","pincode"]):
         return jsonify({"error":"Complete billing address required"}),400
     if not paymentMethod:
         return jsonify({"error":"paymentMethod required"}),400
+    # Validate phone/pincode/state/district/payment
+    import re
+    phone = re.sub(r"\D", "", str(address.get("phone","")))
+    if not re.fullmatch(r"\d{10}", phone):
+        return jsonify({"error":"Phone must be 10 digits"}),400
+    if not re.fullmatch(r"\d{6}", str(address.get("pincode",""))):
+        return jsonify({"error":"Pincode must be 6 digits"}),400
+    if address.get("state") not in districtsByState:
+        return jsonify({"error":"Invalid state code"}),400
+    if address.get("district") not in districtsByState.get(address.get("state"), []):
+        return jsonify({"error":"Invalid district for state"}),400
+    if paymentMethod not in ["upi","card","netbanking","cod"]:
+        return jsonify({"error":"Invalid paymentMethod"}),400
     enriched=[]
     for it in items:
         pid = int(it.get("id"))
@@ -503,6 +623,7 @@ def update_order_status(oid):
         if o.get("id")==oid or o.get("id")=="#"+oid or o.get("id","").replace("#","")==oid.replace("#",""):
             o["status"]=status
             save_orders(orders)
+            log_audit("order:status", {"id": oid, "status": status}, request.remote_addr or "")
             return jsonify(o)
     return jsonify({"error":"Order not found"}),404
 
@@ -515,6 +636,7 @@ def delete_order(oid):
     orders=[o for o in orders if not (o.get("id")==oid or o.get("id")=="#"+oid or o.get("id","").replace("#","")==oid.replace("#",""))]
     if len(orders)==initial: return jsonify({"error":"Order not found"}),404
     save_orders(orders)
+    log_audit("order:delete", {"id": oid}, request.remote_addr or "")
     return jsonify({"message":"Order deleted"})
 
 @app.route("/admin")

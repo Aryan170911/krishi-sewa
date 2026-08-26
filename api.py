@@ -10,6 +10,8 @@ import random
 import string
 import time
 import logging
+import hmac
+import hashlib
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify, send_from_directory, g
 from flask_cors import CORS
@@ -17,6 +19,9 @@ try:
     from dotenv import load_dotenv
     load_dotenv()
 except: pass
+try:
+    import razorpay
+except: razorpay = None
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.join(BASE_DIR, "krishi-sewa-frontend")
@@ -350,6 +355,29 @@ def save_orders(orders):
 
 products = load_products()
 
+# Supabase (supports NEXT_PUBLIC_* for StackHost)
+SUPABASE_URL = os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL") or ""
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_ANON_KEY") or os.environ.get("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") or ""
+supabase = None
+if SUPABASE_URL and SUPABASE_KEY:
+    try:
+        from supabase import create_client
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        print(f"[Supabase] Connected to {SUPABASE_URL}", flush=True)
+    except Exception as e:
+        print(f"[Supabase] init failed, using JSON: {e}", flush=True)
+else:
+    print("[Supabase] Not configured — using JSON files", flush=True)
+
+# Razorpay config (test keys)
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "rzp_test_Sv4HWH1qFfP22s")
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "test_secret_for_demo")
+razorpay_client = None
+if razorpay:
+    try:
+        razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+    except: pass
+
 AUDIT_FILE = os.path.join(DATA_DIR, "audit.json")
 def load_audit():
     if not os.path.exists(AUDIT_FILE):
@@ -415,6 +443,14 @@ def admin_login():
 def admin_audit():
     logs = load_audit()
     return jsonify(list(reversed(logs[-50:])))
+
+@app.route("/api/config")
+def get_config():
+    return jsonify({
+        "supabaseUrl": SUPABASE_URL or "",
+        "supabaseAnonKey": os.environ.get("SUPABASE_ANON_KEY") or os.environ.get("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") or "",
+        "razorpayKeyId": RAZORPAY_KEY_ID
+    })
 
 @app.route("/api/admin/stats")
 def admin_stats():

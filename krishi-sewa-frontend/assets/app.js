@@ -1,8 +1,33 @@
 /**
- * Krishi Sewa Foundation - Frontend + Backend
- * Now integrated with Express API (server/server.js)
- * Falls back to mock data if API unavailable
+ * Krishi Sewa Foundation - Frontend + Backend + Supabase Auth OTP
+ * Now integrated with Express/Python API + Supabase (signup/OTP/reset)
  */
+let supabaseClient = null;
+async function initSupabase() {
+  try {
+    const cfg = await apiGet("/config");
+    if (cfg && cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase) {
+      supabaseClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+      console.log("✅ Supabase Auth ready");
+      // listen auth changes
+      supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (session?.user) {
+          state.authUser = session.user;
+          localStorage.setItem("krishi_user", JSON.stringify(session.user));
+        } else {
+          state.authUser = null;
+          localStorage.removeItem("krishi_user");
+        }
+        renderApp();
+      });
+      const { data } = await supabaseClient.auth.getSession();
+      if (data?.session?.user) {
+        state.authUser = data.session.user;
+        localStorage.setItem("krishi_user", JSON.stringify(data.session.user));
+      }
+    }
+  } catch (e) { console.warn("Supabase init failed, using local auth mock", e); }
+}
 
 function getApiBase() {
   const host = window.location.hostname;
@@ -350,7 +375,9 @@ const state = {
   orders: [],
   isMobileMenuOpen: false,
   isCartSidebarOpen: false,
-  priceRange: "all"
+  priceRange: "all",
+  authUser: JSON.parse(localStorage.getItem("krishi_user") || "null"),
+  authMode: "login" // login | signup | otp | reset
 };
 
 // ============================================
@@ -471,6 +498,7 @@ function filterProducts() {
 
 function renderNav() {
   const cartCount = getCartCount();
+  const authUser = state.authUser;
   const navLinks = [
     { page: "home", label: "Home" },
     { page: "shop", label: "Shop" },
@@ -501,10 +529,20 @@ function renderNav() {
             <span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">shopping_cart</span>
             ${cartCount > 0 ? `<span class="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-accent-ochre text-[10px] font-bold text-on-tertiary-fixed border border-surface">${cartCount > 99 ? "99+" : cartCount}</span>` : ""}
           </button>
-          <button class="hidden md:block bg-primary text-on-primary font-label-md text-label-md px-6 py-2 rounded-lg hover:opacity-90 transition-opacity" onclick="navigateTo('about')">Register</button>
-          <div class="hidden md:block h-8 w-8 rounded-full bg-secondary-container overflow-hidden border border-outline-variant cursor-pointer">
-            <img alt="User Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBuWfjWr0p5XkK1rHLLnTdxUDbYf9ayByiYPyjBZSVjMOrBETL5wVjPWTeraHHQq3KI7QOLZBfFAsfhcT0gPrEVSEhehtC8frutSK3EDnUjBnay621C29bEQjr8loouTvCKmhDcB2Hf3ARHy2QR2UYWq8OdX9HMF-DKN2OhTKpYVlwob-A8MH_P-2_1vk4EUTTMsGJJbUczKUMg-lUXBU87mQ4mml0IVjYZoDUKFVhRJfU6ZJcnrchh7Q">
-          </div>
+          ${authUser ? `
+            <div class="hidden md:flex items-center gap-2 bg-secondary-container rounded-full pl-2 pr-3 py-1 border border-outline-variant">
+              <div class="h-7 w-7 rounded-full bg-primary text-on-primary flex items-center justify-center text-xs font-bold">${(authUser.email || "U")[0].toUpperCase()}</div>
+              <span class="text-xs font-semibold text-on-secondary-container max-w-[120px] truncate">${(authUser.email || "User")}</span>
+              <button onclick="handleLogout()" title="Logout" class="text-on-surface-variant hover:text-error"><span class="material-symbols-outlined text-lg">logout</span></button>
+            </div>
+          ` : `
+            <button class="hidden md:flex items-center gap-1 bg-primary text-on-primary font-label-md text-label-md px-4 py-2 rounded-lg hover:opacity-90 transition-opacity" onclick="navigateTo('auth')">
+              <span class="material-symbols-outlined text-lg">login</span> Login
+            </button>
+            <div onclick="navigateTo('auth')" class="hidden md:flex h-8 w-8 rounded-full bg-secondary-container overflow-hidden border border-outline-variant cursor-pointer items-center justify-center text-on-secondary-container">
+              <span class="material-symbols-outlined text-lg">person</span>
+            </div>
+          `}
         </div>
       </div>
     </header>
@@ -522,6 +560,11 @@ function renderMobileDrawer() {
     { page: "home", icon: "eco", label: "Impact", action: "scrollToEvents()" },
     { page: "about", icon: "groups", label: "About Us" }
   ];
+  if (state.authUser) {
+    drawerLinks.push({ page: "auth", icon: "verified_user", label: (state.authUser.email || "Account").split("@")[0] });
+  } else {
+    drawerLinks.push({ page: "auth", icon: "login", label: "Login / Signup" });
+  }
 
   return `
     <div class="md:hidden fixed inset-0 z-[55]" onclick="closeMobileMenu()">
@@ -538,8 +581,17 @@ function renderMobileDrawer() {
             </button>
           `).join("")}
         </div>
-        <div class="px-6 pt-4 border-t border-outline-variant mt-4">
-          <button class="w-full bg-primary text-on-primary font-label-md text-label-md min-h-[48px] rounded-xl hover:bg-primary-container transition-colors" onclick="navigateTo('about'); closeMobileMenu()">Register</button>
+        <div class="px-6 pt-4 border-t border-outline-variant mt-4 space-y-2">
+          ${state.authUser ? `
+            <div class="text-xs text-on-surface-variant text-center">Signed in as <b class="text-primary">${state.authUser.email}</b></div>
+            <button class="w-full border border-outline-variant text-error font-label-md text-label-md min-h-[48px] rounded-xl hover:bg-error-container transition-colors flex items-center justify-center gap-2" onclick="handleLogout()">
+              <span class="material-symbols-outlined">logout</span> Logout
+            </button>
+          ` : `
+            <button class="w-full bg-primary text-on-primary font-label-md text-label-md min-h-[48px] rounded-xl hover:bg-primary-container transition-colors flex items-center justify-center gap-2" onclick="navigateTo('auth'); closeMobileMenu()">
+              <span class="material-symbols-outlined">login</span> Login / Signup (OTP)
+            </button>
+          `}
         </div>
       </nav>
     </div>
@@ -1731,6 +1783,12 @@ function renderAboutPage() {
         </div>
       </section>
 
+      <section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 mb-section-gap">
+        <h3 class="font-headline-md text-headline-md text-primary mb-2 flex items-center gap-2"><span class="material-symbols-outlined">mail</span> Stay Updated — OTP Protected</h3>
+        <p class="text-body-md text-on-surface-variant mb-3">Create account with email OTP for signup & password reset. Powered by Supabase Auth (same DB as orders).</p>
+        <button onclick="navigateTo('auth')" class="bg-primary text-on-primary px-6 py-2.5 rounded-lg font-semibold">Create Account / Login with OTP</button>
+      </section>
+
       <section class="bg-primary-container rounded-2xl p-8 md:p-16 text-center">
         <div class="max-w-2xl mx-auto">
           <span class="material-symbols-outlined text-primary text-5xl mb-4 block">volunteer_activism</span>
@@ -1748,6 +1806,127 @@ function renderAboutPage() {
       </section>
     </main>
   `;
+}
+
+function renderAuthPage() {
+  const user = state.authUser;
+  if (user) {
+    return `
+    <main class="flex-grow w-full max-w-md mx-auto px-4 py-12 text-center">
+      <div class="bg-white border border-outline-variant rounded-2xl p-8">
+        <span class="material-symbols-outlined text-primary text-5xl">verified_user</span>
+        <h1 class="text-2xl font-bold text-primary mt-3">Welcome, ${user.email}</h1>
+        <p class="text-on-surface-variant mt-2">You are logged in via Supabase OTP. Your orders will be linked to this email.</p>
+        <p class="text-xs text-on-surface-variant mt-2 break-all">ID: ${user.id}</p>
+        <button onclick="handleLogout()" class="mt-6 w-full bg-primary text-on-primary py-3 rounded-lg font-semibold">Logout</button>
+        <button onclick="navigateTo('shop')" class="mt-3 w-full border border-outline-variant py-3 rounded-lg font-semibold">Continue Shopping</button>
+      </div>
+    </main>`;
+  }
+  const mode = state.authMode;
+  return `
+  <main class="flex-grow w-full max-w-md mx-auto px-4 py-8">
+    <div class="bg-white border border-outline-variant rounded-2xl p-6">
+      <h1 class="text-2xl font-bold text-primary text-center">Account</h1>
+      <p class="text-center text-on-surface-variant text-sm mb-6">Signup & Reset via <b>Supabase Email OTP</b></p>
+      <div class="flex gap-2 mb-6">
+        ${["login","signup","otp","reset"].map(m=>`
+          <button onclick="state.authMode='${m}'; renderApp()" class="flex-1 py-2 rounded-lg text-sm font-bold ${mode===m?'bg-primary text-on-primary':'bg-surface-variant text-on-surface-variant'}">${m.toUpperCase()}</button>
+        `).join("")}
+      </div>
+      ${mode==="login" ? `
+        <form onsubmit="handleLogin(event)" class="space-y-3">
+          <input id="authEmail" type="email" required placeholder="Email" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <input id="authPass" type="password" required placeholder="Password" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Login</button>
+          <p id="authMsg" class="text-center text-sm text-error"></p>
+        </form>
+      ` : mode==="signup" ? `
+        <form onsubmit="handleSignup(event)" class="space-y-3">
+          <input id="authName" placeholder="Full Name" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <input id="authEmail" type="email" required placeholder="Email" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <input id="authPass" type="password" required placeholder="Password (min 6)" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Signup — Send OTP to Email</button>
+          <p id="authMsg" class="text-center text-sm text-on-surface-variant">Supabase will email OTP / confirmation link</p>
+        </form>
+      ` : mode==="otp" ? `
+        <form onsubmit="handleOtpSend(event)" class="space-y-3">
+          <input id="authEmail" type="email" required placeholder="Email for OTP" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Send OTP</button>
+          <div class="flex gap-2">
+            <input id="authOtp" placeholder="Enter 6-digit OTP" class="flex-1 border border-outline-variant rounded-lg px-3 py-3">
+            <button type="button" onclick="handleOtpVerify()" class="bg-secondary-container px-4 rounded-lg font-bold">Verify</button>
+          </div>
+          <p id="authMsg" class="text-center text-sm"></p>
+        </form>
+      ` : `
+        <form onsubmit="handleResetSend(event)" class="space-y-3">
+          <input id="authEmail" type="email" required placeholder="Email to reset" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <button type="submit" class="w-full bg-accent-ochre text-white py-3 rounded-lg font-bold">Send Reset Link (OTP)</button>
+          <p id="authMsg" class="text-center text-sm text-on-surface-variant">Check email for reset link</p>
+        </form>
+      `}
+      <p class="text-center text-xs text-on-surface-variant mt-4">Supabase Auth • OTP via email • Secure • No password stored locally</p>
+    </div>
+  </main>`;
+}
+async function handleSignup(e){
+  e.preventDefault();
+  const email=document.getElementById("authEmail").value.trim();
+  const password=document.getElementById("authPass").value;
+  const name=document.getElementById("authName")?.value || "";
+  const msg=document.getElementById("authMsg");
+  if(!supabaseClient){ msg.textContent="Supabase not ready — check /api/config"; msg.className="text-center text-sm text-error"; return; }
+  msg.textContent="Sending OTP..."; 
+  const { error } = await supabaseClient.auth.signUp({ email, password, options:{ data:{ full_name:name }, emailRedirectTo: window.location.origin + "/#auth" }});
+  if(error){ msg.textContent=error.message; msg.className="text-center text-sm text-error"; }
+  else { msg.textContent="✅ Check email for OTP / confirmation link! Then use OTP tab to verify."; msg.className="text-center text-sm text-green-700"; toast("Signup OTP sent to "+email); }
+}
+async function handleLogin(e){
+  e.preventDefault();
+  const email=document.getElementById("authEmail").value.trim();
+  const password=document.getElementById("authPass").value;
+  const msg=document.getElementById("authMsg");
+  if(!supabaseClient){ msg.textContent="Supabase not ready"; return; }
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if(error){ msg.textContent=error.message; msg.className="text-center text-sm text-error"; }
+  else { msg.textContent="✅ Logged in"; toast("Welcome "+email); navigateTo("shop"); }
+}
+async function handleOtpSend(e){
+  e.preventDefault();
+  const email=document.getElementById("authEmail").value.trim();
+  const msg=document.getElementById("authMsg");
+  if(!supabaseClient){ msg.textContent="Supabase not ready"; return; }
+  msg.textContent="Sending OTP...";
+  const { error } = await supabaseClient.auth.signInWithOtp({ email, options:{ shouldCreateUser:true }});
+  if(error){ msg.textContent=error.message; msg.className="text-center text-sm text-error"; }
+  else { msg.textContent="✅ OTP sent to "+email+" — check email!"; msg.className="text-center text-sm text-green-700"; toast("OTP sent"); }
+}
+async function handleOtpVerify(){
+  const email=document.getElementById("authEmail").value.trim();
+  const token=document.getElementById("authOtp").value.trim();
+  const msg=document.getElementById("authMsg");
+  if(!email||!token){ msg.textContent="Enter email and OTP"; return; }
+  if(!supabaseClient){ msg.textContent="Supabase not ready"; return; }
+  const { error } = await supabaseClient.auth.verifyOtp({ email, token, type:"email" });
+  if(error){ msg.textContent=error.message; msg.className="text-center text-sm text-error"; }
+  else { msg.textContent="✅ Verified! Logged in"; toast("OTP verified"); navigateTo("shop"); }
+}
+async function handleResetSend(e){
+  e.preventDefault();
+  const email=document.getElementById("authEmail").value.trim();
+  const msg=document.getElementById("authMsg");
+  if(!supabaseClient){ msg.textContent="Supabase not ready"; return; }
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + "/#auth" });
+  if(error){ msg.textContent=error.message; }
+  else { msg.textContent="✅ Reset link sent to "+email; msg.className="text-center text-sm text-green-700"; toast("Reset email sent"); }
+}
+async function handleLogout(){
+  if(supabaseClient) await supabaseClient.auth.signOut();
+  state.authUser=null;
+  localStorage.removeItem("krishi_user");
+  toast("Logged out");
+  navigateTo("auth");
 }
 
 // ============================================
@@ -1832,6 +2011,10 @@ function handleHashChange() {
       break;
     case 'about':
       navigateTo('about');
+      break;
+    case 'auth':
+      state.currentPage = 'auth';
+      renderApp();
       break;
     case '404':
       state.currentPage = '404';
@@ -2171,6 +2354,9 @@ function renderApp() {
     case 'about':
       pageContent = renderAboutPage();
       break;
+    case 'auth':
+      pageContent = renderAuthPage();
+      break;
     case '404':
       pageContent = render404Page();
       break;
@@ -2196,7 +2382,8 @@ async function init() {
   // Initial render (with mock fallback immediately)
   handleHashChange();
 
-  // Try backend sync (overwrites mocks if available) then re-render current page
+  // Init Supabase Auth + backend sync
+  await initSupabase();
   await syncFromBackend();
   // Re-render to show backend data
   renderApp();

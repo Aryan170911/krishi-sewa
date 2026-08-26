@@ -8,6 +8,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import { products as seedProducts, categories, events, indianStates, districtsByState } from "./data.js";
+import Razorpay from "razorpay";
+import crypto from "crypto";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
@@ -19,6 +22,29 @@ const PORT = process.env.PORT || 3000;
 const ORDERS_FILE = path.join(__dirname, "data", "orders.json");
 const PRODUCTS_FILE = path.join(__dirname, "data", "products.json");
 const IS_PROD = process.env.NODE_ENV === "production";
+
+// Supabase (supports both SUPABASE_* and NEXT_PUBLIC_* for StackHost)
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
+let supabase = null;
+if (SUPABASE_URL && SUPABASE_KEY) {
+  try {
+    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    console.log(`[Supabase] Connected to ${SUPABASE_URL}`);
+  } catch (e) { console.warn("[Supabase] init failed, falling back to JSON:", e.message); }
+} else {
+  console.log("[Supabase] Not configured — using JSON files (data/*.json)");
+}
+
+// Razorpay (test keys - replace via .env for prod)
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || "rzp_test_Sv4HWH1qFfP22s";
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || "test_secret_for_demo";
+let razorpay = null;
+try {
+  if (RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET) {
+    razorpay = new Razorpay({ key_id: RAZORPAY_KEY_ID, key_secret: RAZORPAY_KEY_SECRET });
+  }
+} catch (e) { console.warn("Razorpay init failed (using mock):", e.message); }
 
 // Security & Logging
 app.use(helmet({
@@ -202,6 +228,56 @@ app.get("/api/admin/stats", (req, res) => {
 app.get("/api/admin/audit", requireAdmin, (req, res) => {
   res.json(loadAudit().slice(-50).reverse());
 });
+app.get("/api/config", (req, res) => {
+  res.json({
+    supabaseUrl: SUPABASE_URL || "",
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "",
+    razorpayKeyId: RAZORPAY_KEY_ID
+  });
+});
+
+// Payment Gateway - Razorpay (test) + config
+app.get("/api/payment/config", (req, res) => {
+  res.json({
+    razorpayKeyId: RAZORPAY_KEY_ID,
+    codEnabled: true,
+    upiEnabled: true,
+    methods: ["cod","upi","card","netbanking","razorpay"]
+  });
+});
+app.post("/api/payment/razorpay/order", async (req, res) => {
+  const { amount } = req.body; // amount in paise (e.g., 101000 for 1010.00)
+  if (!amount || amount < 100) return res.status(400).json({ error: "Valid amount required" });
+  // Mock if Razorpay not configured or test secret
+  if (!razorpay || RAZORPAY_KEY_SECRET === "test_secret_for_demo") {
+    const mockId = "order_mock_" + Math.random().toString(36).slice(2,10);
+    return res.json({ id: mockId, amount, currency: "INR", keyId: RAZORPAY_KEY_ID, mock: true });
+  }
+  try {
+    const order = await razorpay.orders.create({ amount: Math.round(amount), currency: "INR", receipt: "krishi_" + Date.now() });
+    res.json({ ...order, keyId: RAZORPAY_KEY_ID });
+  } catch (e) {
+    console.error("Razorpay order failed:", e);
+    res.status(500).json({ error: "Razorpay order failed: " + e.message });
+  }
+});
+app.post("/api/payment/razorpay/verify", (req, res) => {
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+    return res.status(400).json({ error: "Missing razorpay fields" });
+  }
+  // Mock verification for demo keys
+  if (RAZORPAY_KEY_SECRET === "test_secret_for_demo") {
+    return res.json({ verified: true, mock: true, message: "Demo verification passed (set real RAZORPAY_KEY_SECRET for prod)" });
+  }
+  const expected = crypto.createHmac("sha256", RAZORPAY_KEY_SECRET).update(razorpay_order_id + "|" + razorpay_payment_id).digest("hex");
+  if (expected === razorpay_signature) {
+    logAudit("payment:razorpay_verify", { order_id: razorpay_order_id, payment_id: razorpay_payment_id }, req.ip);
+    res.json({ verified: true });
+  } else {
+    res.status(400).json({ verified: false, error: "Invalid signature" });
+  }
+});
 
 // Products - with filtering (public)
 app.get("/api/products", (req, res) => {
@@ -328,7 +404,7 @@ app.post("/api/orders", orderLimiter, (req, res) => {
   const validStates = Object.keys(districtsByState);
   if (!validStates.includes(address.state)) return res.status(400).json({ error: "Invalid state code" });
   if (!districtsByState[address.state]?.includes(address.district)) return res.status(400).json({ error: "Invalid district for state" });
-  if (!["upi","card","netbanking","cod"].includes(paymentMethod)) return res.status(400).json({ error: "Invalid paymentMethod" });
+  if (!["upi","card","netbanking","cod","razorpay"].includes(paymentMethod)) return res.status(400).json({ error: "Invalid paymentMethod" });
   const enrichedItems = [];
   for (const item of items) {
     const product = products.find((p) => p.id === parseInt(item.id));

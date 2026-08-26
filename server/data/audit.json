@@ -1,0 +1,12 @@
+[
+  {
+    "timestamp": "2026-08-26T22:41:01.812Z",
+    "action": "product:delete",
+    "details": {
+      "id": 1,
+      "name": "Heirloom Tomato Seeds"
+    },
+    "ip": "::1",
+    "user": "admin"
+  }
+]

@@ -3,12 +3,22 @@
  * Now integrated with Express/Python API + Supabase (signup/OTP/reset)
  */
 let supabaseClient = null;
+let supabaseConfigError = null;
 async function initSupabase() {
   try {
     const cfg = await apiGet("/config");
-    if (cfg && cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase) {
+    if (!cfg) {
+      supabaseConfigError = "Could not reach backend /api/config (network or CORS)";
+      console.warn("[Supabase]", supabaseConfigError);
+    } else if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
+      supabaseConfigError = "Backend returned empty supabaseUrl/anonKey — set env vars SUPABASE_URL + SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) and restart server";
+      console.warn("[Supabase]", supabaseConfigError, cfg);
+    } else if (!window.supabase) {
+      supabaseConfigError = "supabase-js library not loaded (CDN blocked?)";
+      console.warn("[Supabase]", supabaseConfigError);
+    } else {
       supabaseClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
-      console.log("✅ Supabase Auth ready");
+      console.log("✅ Supabase Auth ready →", cfg.supabaseUrl);
       // listen auth changes
       supabaseClient.auth.onAuthStateChange((event, session) => {
         if (session?.user) {
@@ -26,7 +36,7 @@ async function initSupabase() {
         localStorage.setItem("krishi_user", JSON.stringify(data.session.user));
       }
     }
-  } catch (e) { console.warn("Supabase init failed, using local auth mock", e); }
+  } catch (e) { supabaseConfigError = String(e?.message || e); console.warn("Supabase init failed:", e); }
 }
 
 function getApiBase() {
@@ -1859,13 +1869,22 @@ function renderAuthPage() {
           </div>
           <p id="authMsg" class="text-center text-sm"></p>
         </form>
-      ` : `
+      `       : `
         <form onsubmit="handleResetSend(event)" class="space-y-3">
           <input id="authEmail" type="email" required placeholder="Email to reset" class="w-full border border-outline-variant rounded-lg px-3 py-3">
           <button type="submit" class="w-full bg-accent-ochre text-white py-3 rounded-lg font-bold">Send Reset Link (OTP)</button>
           <p id="authMsg" class="text-center text-sm text-on-surface-variant">Check email for reset link</p>
         </form>
       `}
+      ${supabaseConfigError ? `
+        <div class="mt-4 p-3 bg-error-container text-on-error-container rounded-lg text-xs">
+          <b>Config issue:</b> ${supabaseConfigError}
+          <button onclick="(async()=>{supabaseConfigError=null;await initSupabase();renderApp();})()" class="ml-2 underline font-bold">Retry</button>
+        </div>` : !supabaseClient ? `
+        <div class="mt-4 p-3 bg-error-container text-on-error-container rounded-lg text-xs">
+          Supabase Auth not initialized. Check browser console for details.
+          <button onclick="(async()=>{await initSupabase();renderApp();})()" class="ml-2 underline font-bold">Retry</button>
+        </div>` : ""}
       <p class="text-center text-xs text-on-surface-variant mt-4">Supabase Auth • OTP via email • Secure • No password stored locally</p>
     </div>
   </main>`;

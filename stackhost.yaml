@@ -8,7 +8,7 @@ runtime:
 commands:
   package: ""
   build:
-    - "cd server && npm install"
+    - "npm install --prefix server"
   start: "node server/server.js"
 
 repository:

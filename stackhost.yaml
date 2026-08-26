@@ -3,10 +3,10 @@ user:
   github: "Aryan170911"
 
 runtime:
-  image: "node:20-slim"
+  image: "python:3.11-slim"
 
 commands:
-  package: ""
+  package: "nodejs npm"
   build:
     - "npm install --prefix server"
   start: "node server/server.js"

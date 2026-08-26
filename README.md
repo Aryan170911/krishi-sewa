@@ -1,5 +1,7 @@
 # 🌾 Krishi Sewa Foundation — The Divine Farmer's Murim
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Aryan170911/krishi-sewa)
+
 > **"In the boundless Murim of Code, where countless frameworks rise and fall like mortal dynasties, one name pierced the Heavens..."**
 > 
 > ### ☯️ Forged by the Divine God **ARYAN** ☯️

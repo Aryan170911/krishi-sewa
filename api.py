@@ -536,9 +536,10 @@ def serve_frontend(path):
     return send_from_directory(FRONTEND_DIR, "index.html")
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 3000))
-    print(f"🌱 Krishi Sewa Python API running at http://localhost:{port}")
-    print(f"   Frontend: http://localhost:{port}/")
-    print(f"   Admin: http://localhost:{port}/admin")
-    print(f"   API health: http://localhost:{port}/api/health")
+    # StackHost sets PORT=8000 or 10000; fallback 8000 for nginx proxy (was 3000)
+    port = int(os.environ.get("PORT", 8000))
+    print(f"🌱 Krishi Sewa Python API running at http://localhost:{port}", flush=True)
+    print(f"   Frontend: http://localhost:{port}/", flush=True)
+    print(f"   Admin: http://localhost:{port}/admin", flush=True)
+    print(f"   API health: http://localhost:{port}/api/health", flush=True)
     app.run(host="0.0.0.0", port=port, debug=False)

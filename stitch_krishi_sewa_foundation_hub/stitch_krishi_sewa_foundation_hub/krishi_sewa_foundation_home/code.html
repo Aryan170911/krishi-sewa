@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Krishi Sewa Foundation</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600&amp;family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-low": "#f1f4f0",
+                        "on-error": "#ffffff",
+                        "secondary-container": "#e8dfc5",
+                        "tertiary-container": "#56340e",
+                        "on-secondary": "#ffffff",
+                        "tertiary-fixed": "#ffdcbd",
+                        "on-primary-container": "#86af99",
+                        "tertiary-fixed-dim": "#f0bd8b",
+                        "on-secondary-container": "#68634d",
+                        "on-primary-fixed-variant": "#274e3d",
+                        "error": "#ba1a1a",
+                        "on-surface": "#191c1a",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed": "#2c1600",
+                        "primary-fixed-dim": "#a5d0b9",
+                        "surface-container": "#ecefea",
+                        "inverse-on-surface": "#eff2ed",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-highest": "#e0e3df",
+                        "on-background": "#191c1a",
+                        "inverse-primary": "#a5d0b9",
+                        "surface-dim": "#d8dbd6",
+                        "outline-variant": "#c1c8c2",
+                        "surface": "#f7faf5",
+                        "outline": "#717973",
+                        "secondary-fixed": "#ebe2c8",
+                        "surface-variant": "#e0e3df",
+                        "secondary-fixed-dim": "#cec6ad",
+                        "on-tertiary-fixed-variant": "#623f18",
+                        "primary": "#012d1d",
+                        "surface-tint": "#3f6653",
+                        "secondary": "#645e49",
+                        "on-secondary-fixed-variant": "#4c4733",
+                        "on-secondary-fixed": "#1f1c0b",
+                        "surface-bright": "#f7faf5",
+                        "on-surface-variant": "#414844",
+                        "inverse-surface": "#2d312e",
+                        "on-error-container": "#93000a",
+                        "tertiary": "#3b1f00",
+                        "primary-fixed": "#c1ecd4",
+                        "on-primary": "#ffffff",
+                        "on-primary-fixed": "#002114",
+                        "on-tertiary-container": "#cd9d6d",
+                        "primary-container": "#1b4332",
+                        "surface-container-high": "#e6e9e4",
+                        "background": "#f7faf5",
+                        "error-container": "#ffdad6"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "8px",
+                        "container-max": "1200px",
+                        "stack-sm": "8px",
+                        "margin-mobile": "16px",
+                        "stack-lg": "32px",
+                        "section-gap": "80px",
+                        "stack-md": "16px",
+                        "gutter": "24px",
+                        "margin-desktop": "48px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "body-sm": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["\"Source Serif 4\""],
+                        "headline-sm": ["\"Source Serif 4\""],
+                        "headline-md": ["\"Source Serif 4\""],
+                        "headline-xl": ["\"Source Serif 4\""],
+                        "headline-lg": ["\"Source Serif 4\""],
+                        "label-sm": ["Plus Jakarta Sans"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["30px", { "lineHeight": "38px", "fontWeight": "600" }],
+                        "headline-sm": ["22px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-md": ["28px", { "lineHeight": "36px", "fontWeight": "600" }],
+                        "headline-xl": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-lg": ["36px", { "lineHeight": "44px", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "14px", "letterSpacing": "0.03em", "fontWeight": "600" }],
+                        "label-md": ["14px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-surface text-on-surface font-body-md min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<nav class="bg-surface border-b border-outline-variant w-full sticky top-0 z-50">
+<div class="flex justify-between items-center px-margin-mobile md:px-margin-desktop py-4 max-w-container-max mx-auto">
+<div class="flex items-center gap-2">
+<img alt="Krishi Sewa Logo" class="h-10 w-10 object-contain rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCMKtfiGX6Cjeg5nrYHym5CsYicMn21oNobRoVe0kZg1gJY6VPXSkFTU3BSw3plR4vIZnuko1nQ_O2sXRBz5eBy6Qsgeku-kPjdzr1AE4Ar4xqIyeoQmwObxO-eneGRgXnUD_70eXgh-WrOMV3bpdSt-bMTDBiwNeIItMI6MR4zQB2GozViEi1o1JP9JvNtyl5ryNd2fu2sVCN2fJzXvNaouibg_my5NdIxEtmJBFe5xHGPWMpj8DRp5V3rVDZ8U3ytRU4"/>
+<span class="font-headline-md text-headline-md font-bold text-primary">Krishi Sewa</span>
+</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-primary border-b-2 border-primary pb-1 font-bold font-label-md text-label-md" href="#">Home</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200 font-label-md text-label-md" href="#">News</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200 font-label-md text-label-md" href="#">Events</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200 font-label-md text-label-md" href="#">Shop</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200 font-label-md text-label-md" href="#">About Us</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="hidden md:flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-weight="fill" style="font-variation-settings: 'FILL' 1;">search</span>
+</button>
+<button class="bg-primary text-on-primary font-label-md text-label-md px-6 py-2 rounded-lg hover:opacity-90 transition-opacity">Register</button>
+<button class="md:hidden text-on-surface-variant">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</div>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="flex-grow">
+<!-- Hero Section (Events & News) -->
+<section class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-section-gap">
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<div class="md:col-span-8 flex flex-col justify-center">
+<h1 class="font-headline-xl text-headline-xl text-primary mb-stack-md">Cultivating Growth, Empowering Communities.</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-stack-lg max-w-2xl">Join the Krishi Sewa Foundation in our mission to support sustainable agriculture and empower local farmers through education and resources.</p>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-gutter mt-stack-lg">
+<!-- Event Card 1 -->
+<div class="relative rounded-xl overflow-hidden group cursor-pointer border border-outline-variant hover:border-primary transition-colors duration-300">
+<div class="bg-cover bg-center w-full h-80 transition-transform duration-700 group-hover:scale-105" data-alt="A high-quality, editorial-style photograph of farmers gathering outdoors during a bright, sunny day for a seed distribution event. Warm, natural lighting highlighting rich green tones and earth colors. The mood is hopeful and community-driven. Shot with a shallow depth of field to emphasize the action in the foreground." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDmjj5eWaNxGjziyS1T4jN9Visb7ZnC31CfNWEGisXu-8Q_xUF0IY1CHbiBZdZV9DS9g3wpHLJrmGY_V_EA4XBW0js0km0a8vtHOW0HHIV7QdKV9LIbs2eCfRalJumjtrTMzckQy56ox3HVfSmkjmsjuzr9Lbjfn2snIVv1DE04Zo6M1FgETeF1USZVGyShRKhRhEzB9iqRGNHUfZmI0rSmAwGlliioZBZHWi0-3ALBX0LxEUyjhuilkg')"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-primary/90 via-primary/40 to-transparent flex flex-col justify-end p-6">
+<span class="inline-block bg-secondary-container text-on-secondary-container font-label-sm text-label-sm px-3 py-1 rounded-full mb-2 w-max">Upcoming Event</span>
+<h3 class="font-headline-md text-headline-md text-on-primary mb-2">Annual Seed Distribution Event</h3>
+<p class="font-body-sm text-body-sm text-surface-container-low line-clamp-2">Providing high-yield, resilient seed varieties to local communities for the upcoming planting season.</p>
+</div>
+</div>
+<!-- Event Card 2 -->
+<div class="relative rounded-xl overflow-hidden group cursor-pointer border border-outline-variant hover:border-primary transition-colors duration-300">
+<div class="bg-cover bg-center w-full h-80 transition-transform duration-700 group-hover:scale-105" data-alt="An editorial-style photograph of a sustainable farming workshop in progress. An instructor is demonstrating soil techniques to a small group in a rustic, open-air barn. Natural light filtering through wooden slats. Warm, earthy color palette with muted greens and browns. Professional and grounded atmosphere." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBAnDm7JbSISZuKgcdfHRajGjGt2wGTowBr4R0kEEu-9zSrWToZuSNy1TukV-23Z_VdnKGTbUCRn5rlt1hGgkEg7E6Ty_q5xDhBDSbDq8DLWfDGXiGYyPbNB0dpzu-LbHp0CGvCvlik5oDrIn1wqdW2ula35rGX_g_0TiGLzQpcc8zoX9TmllNOYO_pQMEhzZN2evjMX582GhbIgpKXzObfClxtGEQkZuPyQtaLeH4YD0ZnzkG4UQNNzQ')"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-primary/90 via-primary/40 to-transparent flex flex-col justify-end p-6">
+<span class="inline-block bg-secondary-container text-on-secondary-container font-label-sm text-label-sm px-3 py-1 rounded-full mb-2 w-max">New Workshop</span>
+<h3 class="font-headline-md text-headline-md text-on-primary mb-2">New Sustainable Farming Workshop</h3>
+<p class="font-body-sm text-body-sm text-surface-container-low line-clamp-2">Learn modern, eco-friendly techniques to maximize yield while preserving soil health.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- CTA Section -->
+<section class="bg-surface-container-low py-section-gap">
+<div class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+<!-- Shop CTA -->
+<div class="bg-surface border border-outline-variant rounded-xl p-8 flex flex-col items-start justify-between relative overflow-hidden group">
+<div class="z-10 relative">
+<div class="w-12 h-12 bg-primary-container rounded-full flex items-center justify-center mb-6">
+<span class="material-symbols-outlined text-on-primary-container">shopping_cart</span>
+</div>
+<h2 class="font-headline-lg text-headline-lg text-primary mb-4">Shop</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mb-8 max-w-sm">Support our cause by purchasing sustainably grown produce and handcrafted farming tools directly from our network.</p>
+<button class="bg-primary text-on-primary font-label-md text-label-md px-6 py-3 rounded-lg hover:opacity-90 transition-opacity flex items-center gap-2">
+                                Browse Store <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+<div class="absolute right-[-10%] bottom-[-10%] w-64 h-64 bg-secondary-fixed opacity-20 rounded-full blur-3xl group-hover:opacity-40 transition-opacity duration-500"></div>
+</div>
+<!-- Register CTA -->
+<div class="bg-primary rounded-xl p-8 flex flex-col items-start justify-between relative overflow-hidden group">
+<div class="z-10 relative">
+<div class="w-12 h-12 bg-on-primary/10 rounded-full flex items-center justify-center mb-6">
+<span class="material-symbols-outlined text-on-primary">how_to_reg</span>
+</div>
+<h2 class="font-headline-lg text-headline-lg text-on-primary mb-4">Register</h2>
+<p class="font-body-md text-body-md text-surface-container-low mb-8 max-w-sm">Become a member of the Krishi Sewa Foundation to access exclusive workshops, resources, and community support.</p>
+<button class="bg-surface text-primary font-label-md text-label-md px-6 py-3 rounded-lg hover:bg-surface-container-high transition-colors flex items-center gap-2">
+                                Join Now <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+<div class="absolute right-[-10%] bottom-[-10%] w-64 h-64 bg-primary-fixed opacity-10 rounded-full blur-3xl group-hover:opacity-20 transition-opacity duration-500"></div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-primary text-on-primary w-full">
+<div class="flex flex-col md:flex-row justify-between items-start px-margin-mobile md:px-margin-desktop py-section-gap max-w-container-max mx-auto">
+<div class="mb-8 md:mb-0">
+<div class="font-headline-sm text-headline-sm font-bold text-on-primary mb-4">Krishi Sewa</div>
+<p class="font-body-md text-body-md opacity-80 max-w-xs">Cultivating Growth, Empowering Communities.</p>
+<p class="font-label-sm text-label-sm opacity-60 mt-4">© 2024 Krishi Sewa Foundation.</p>
+</div>
+<div class="flex flex-col md:flex-row gap-8 md:gap-16">
+<div class="flex flex-col gap-3">
+<a class="font-label-sm text-label-sm text-on-primary opacity-80 hover:opacity-100 hover:underline transition-all" href="#">Mission</a>
+<a class="font-label-sm text-label-sm text-on-primary opacity-80 hover:opacity-100 hover:underline transition-all" href="#">Privacy Policy</a>
+</div>
+<div class="flex flex-col gap-3">
+<a class="font-label-sm text-label-sm text-on-primary opacity-80 hover:opacity-100 hover:underline transition-all" href="#">Contact Support</a>
+<a class="font-label-sm text-label-sm text-on-primary opacity-80 hover:opacity-100 hover:underline transition-all" href="#">Terms of Service</a>
+</div>
+</div>
+</div>
+</footer>
+</body></html>

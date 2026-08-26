@@ -1,0 +1,241 @@
+<!DOCTYPE html><html lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Order Confirmation - Krishi Sewa</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600&amp;family=Source+Serif+4:wght@600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary": "#645e49",
+                        "on-error-container": "#93000a",
+                        "inverse-on-surface": "#eff2ed",
+                        "on-tertiary-fixed-variant": "#623f18",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-fixed-dim": "#a5d0b9",
+                        "on-primary-fixed-variant": "#274e3d",
+                        "surface-container-low": "#f1f4f0",
+                        "secondary-fixed": "#ebe2c8",
+                        "surface-dim": "#d8dbd6",
+                        "on-primary-container": "#86af99",
+                        "on-primary-fixed": "#002114",
+                        "outline": "#717973",
+                        "on-secondary": "#ffffff",
+                        "surface-tint": "#3f6653",
+                        "tertiary-fixed": "#ffdcbd",
+                        "secondary-fixed-dim": "#cec6ad",
+                        "tertiary": "#3b1f00",
+                        "inverse-primary": "#a5d0b9",
+                        "on-tertiary-fixed": "#2c1600",
+                        "secondary-container": "#e8dfc5",
+                        "tertiary-fixed-dim": "#f0bd8b",
+                        "error": "#ba1a1a",
+                        "on-error": "#ffffff",
+                        "on-secondary-fixed-variant": "#4c4733",
+                        "surface-container-highest": "#e0e3df",
+                        "inverse-surface": "#2d312e",
+                        "primary": "#012d1d",
+                        "tertiary-container": "#56340e",
+                        "on-surface-variant": "#414844",
+                        "outline-variant": "#c1c8c2",
+                        "on-secondary-fixed": "#1f1c0b",
+                        "primary-container": "#1b4332",
+                        "on-tertiary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "background": "#f7faf5",
+                        "surface-container": "#ecefea",
+                        "surface": "#f7faf5",
+                        "on-tertiary-container": "#cd9d6d",
+                        "error-container": "#ffdad6",
+                        "surface-bright": "#f7faf5",
+                        "surface-container-high": "#e6e9e4",
+                        "on-background": "#191c1a",
+                        "on-surface": "#191c1a",
+                        "primary-fixed": "#c1ecd4",
+                        "on-secondary-container": "#68634d",
+                        "surface-variant": "#e0e3df"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "container-max": "1200px",
+                        "stack-md": "16px",
+                        "unit": "8px",
+                        "stack-sm": "8px",
+                        "margin-desktop": "48px",
+                        "margin-mobile": "16px",
+                        "stack-lg": "32px",
+                        "section-gap": "80px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["\"Source Serif 4\""],
+                        "headline-xl": ["\"Source Serif 4\""],
+                        "label-sm": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "headline-sm": ["\"Source Serif 4\""],
+                        "body-sm": ["Plus Jakarta Sans"],
+                        "headline-md": ["\"Source Serif 4\""],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "headline-lg": ["\"Source Serif 4\""]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["30px", { "lineHeight": "38px", "fontWeight": "600" }],
+                        "headline-xl": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-sm": ["12px", { "lineHeight": "14px", "letterSpacing": "0.03em", "fontWeight": "600" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "headline-sm": ["22px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["28px", { "lineHeight": "36px", "fontWeight": "600" }],
+                        "label-md": ["14px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-lg": ["36px", { "lineHeight": "44px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col antialiased">
+<!-- Top Navigation (Transactional Layout - Hidden Links/Actions to focus on confirmation) -->
+<header class="flex justify-between items-center w-full px-margin-desktop md:px-margin-desktop px-margin-mobile h-20 max-w-container-max mx-auto border-b border-outline-variant bg-background">
+<div class="flex items-center gap-4">
+<button class="text-primary hover:bg-surface-container-low p-2 rounded-full transition-colors md:hidden">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<div class="flex items-center gap-3">
+<img alt="Krishi Sewa Logo" class="w-10 h-10 object-contain rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwDvtdaTBWDNX2UfJ3-AqZRWrs0pDe1ji98caQB_eJydHiNKE1rNm_ubLD7GjzOVJoiP3f7WbYcbSdIBvlTkEnMpKQicqst27Vn4i20TUIkev4sa8mcKBReXdcrPLaTEkkUQ39MJqXzzqKne9xncLG0UbVwTm7DB43pDFCBmMCGUoTYEgN_G_v87p9CCIckElkQDMHO2e7SBrRkIx_lmsm7ABnJVIZRj_bqykazAJnlejRIXMFEsWBY-i0zflOmE4VQFE">
+<span class="font-headline-md text-headline-md text-primary hidden sm:block">Krishi Sewa</span>
+</div>
+</div>
+<div>
+<span class="material-symbols-outlined text-primary text-3xl">check_circle</span>
+</div>
+</header>
+<main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-section-gap flex flex-col items-center">
+<!-- Hero Success Banner -->
+<div class="text-center max-w-2xl mb-section-gap"><div class="mb-stack-md flex justify-center"><span class="material-symbols-outlined text-primary text-6xl md:text-[80px] leading-none">check_circle</span></div>
+<h1 class="font-headline-xl text-headline-xl md:text-headline-xl text-headline-lg-mobile text-primary mb-stack-sm">Your Harvest is Confirmed</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Thank you for cultivating change. Your purchase directly supports our foundation's mission to empower local farmers and promote sustainable agriculture.</p>
+</div>
+<div class="w-full max-w-3xl grid grid-cols-1 md:grid-cols-2 gap-gutter mb-section-gap">
+<!-- Order Details Card -->
+<div class="bg-surface-container-lowest border border-secondary-container rounded-xl p-6 relative overflow-hidden">
+<div class="absolute top-0 right-0 p-4 opacity-10">
+<span class="material-symbols-outlined text-6xl text-primary">receipt_long</span>
+</div>
+<h2 class="font-headline-sm text-headline-sm text-primary mb-stack-md flex items-center gap-2">
+<span class="material-symbols-outlined">info</span> Order Summary
+                </h2>
+<div class="space-y-4 font-body-md text-on-surface">
+<div class="flex justify-between border-b border-surface-variant pb-2">
+<span class="text-on-surface-variant">Order Number</span>
+<span class="font-label-md text-label-md">#KS-8294</span>
+</div>
+<div class="flex justify-between border-b border-surface-variant pb-2">
+<span class="text-on-surface-variant">Date</span>
+<span class="">October 24, 2024</span>
+</div>
+<div class="flex justify-between font-label-md text-label-md pt-2 text-primary">
+<span class="">Total Amount</span>
+<span class="">₹1,700</span>
+</div>
+</div>
+<button class="mt-4 w-full bg-transparent border border-primary text-primary px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-surface-container-low transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">picture_as_pdf</span> Download Invoice (PDF)
+</button></div>
+<!-- Delivery Details Card -->
+<div class="bg-surface-container-lowest border border-secondary-container rounded-xl p-6 relative overflow-hidden">
+<div class="absolute top-0 right-0 p-4 opacity-10">
+<span class="material-symbols-outlined text-6xl text-primary">local_shipping</span>
+</div>
+<h2 class="font-headline-sm text-headline-sm text-primary mb-stack-md flex items-center gap-2">
+<span class="material-symbols-outlined">pin_drop</span> Delivery Details
+                </h2>
+<div class="space-y-2 font-body-md text-on-surface">
+<p class="font-label-md text-label-md">Arjun Patel</p>
+<p class="text-on-surface-variant">142, Green Fields Avenue<br>Sector 4, Agrinagar<br>Maharashtra, 411045</p>
+<p class="text-on-surface-variant mt-2 text-sm">Expected Delivery: Oct 28 - Oct 30</p>
+</div>
+</div>
+</div>
+<!-- What's Next Timeline -->
+<div class="w-full max-w-4xl bg-surface-container-low rounded-xl p-8 mb-section-gap">
+<h2 class="font-headline-md text-headline-md text-primary mb-stack-lg text-center">What's Next?</h2>
+<div class="relative flex flex-col md:flex-row justify-between items-center md:items-start gap-8 md:gap-4">
+<!-- Line -->
+<div class="hidden md:block absolute top-6 left-[10%] right-[10%] h-0.5 bg-outline-variant z-0"></div>
+<div class="md:hidden absolute left-6 top-8 bottom-8 w-0.5 bg-outline-variant z-0"></div>
+<!-- Step 1 -->
+<div class="flex flex-row md:flex-col items-center gap-4 md:w-1/4 relative z-10 w-full">
+<div class="w-12 h-12 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined">shopping_bag</span>
+</div>
+<div class="text-left md:text-center">
+<h3 class="font-label-md text-label-md text-primary">Order Placed</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1 hidden md:block">We've received your request.</p>
+</div>
+</div>
+<!-- Step 2 -->
+<div class="flex flex-row md:flex-col items-center gap-4 md:w-1/4 relative z-10 w-full">
+<div class="w-12 h-12 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center border-2 border-surface-container-low shadow-sm">
+<span class="material-symbols-outlined">grass</span>
+</div>
+<div class="text-left md:text-center">
+<h3 class="font-label-md text-label-md text-on-surface">Seeds Selected</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1 hidden md:block">Preparing your items.</p>
+</div>
+</div>
+<!-- Step 3 -->
+<div class="flex flex-row md:flex-col items-center gap-4 md:w-1/4 relative z-10 w-full">
+<div class="w-12 h-12 rounded-full bg-surface-container-lowest text-outline flex items-center justify-center border-2 border-outline-variant shadow-sm">
+<span class="material-symbols-outlined">fact_check</span>
+</div>
+<div class="text-left md:text-center">
+<h3 class="font-label-md text-label-md text-on-surface-variant">Quality Check</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1 hidden md:block">Ensuring best standards.</p>
+</div>
+</div>
+<!-- Step 4 -->
+<div class="flex flex-row md:flex-col items-center gap-4 md:w-1/4 relative z-10 w-full">
+<div class="w-12 h-12 rounded-full bg-surface-container-lowest text-outline flex items-center justify-center border-2 border-outline-variant shadow-sm">
+<span class="material-symbols-outlined">local_shipping</span>
+</div>
+<div class="text-left md:text-center">
+<h3 class="font-label-md text-label-md text-on-surface-variant">Dispatched</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1 hidden md:block">On its way to you.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Actions -->
+<div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+<button class="bg-primary text-on-primary px-8 py-3 rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">storefront</span> Continue Shopping
+            </button>
+<button class="bg-transparent border border-primary text-primary px-8 py-3 rounded-lg font-label-md text-label-md hover:bg-surface-container-low transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">volunteer_activism</span> View My Impact
+            </button>
+</div>
+</main>
+
+
+</body></html>

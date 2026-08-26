@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Krishi Sewa Foundation</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
+<script id="tailwind-config">
+tailwind.config = {
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        "surface-container-low": "#f1f4f0",
+        "on-error": "#ffffff",
+        "secondary-container": "#e8dfc5",
+        "tertiary-container": "#56340e",
+        "on-secondary": "#ffffff",
+        "tertiary-fixed": "#ffdcbd",
+        "on-primary-container": "#86af99",
+        "tertiary-fixed-dim": "#f0bd8b",
+        "on-secondary-container": "#68634d",
+        "on-primary-fixed-variant": "#274e3d",
+        "error": "#ba1a1a",
+        "on-surface": "#191c1a",
+        "on-tertiary": "#ffffff",
+        "on-tertiary-fixed": "#2c1600",
+        "primary-fixed-dim": "#a5d0b9",
+        "surface-container": "#ecefea",
+        "inverse-on-surface": "#eff2ed",
+        "surface-container-lowest": "#ffffff",
+        "surface-container-highest": "#e0e3df",
+        "on-background": "#191c1a",
+        "inverse-primary": "#a5d0b9",
+        "surface-dim": "#d8dbd6",
+        "outline-variant": "#c1c8c2",
+        "surface": "#f7faf5",
+        "outline": "#717973",
+        "secondary-fixed": "#ebe2c8",
+        "surface-variant": "#e0e3df",
+        "secondary-fixed-dim": "#cec6ad",
+        "on-tertiary-fixed-variant": "#623f18",
+        "primary": "#012d1d",
+        "surface-tint": "#3f6653",
+        "secondary": "#645e49",
+        "on-secondary-fixed-variant": "#4c4733",
+        "on-secondary-fixed": "#1f1c0b",
+        "surface-bright": "#f7faf5",
+        "on-surface-variant": "#414844",
+        "inverse-surface": "#2d312e",
+        "on-error-container": "#93000a",
+        "tertiary": "#3b1f00",
+        "primary-fixed": "#c1ecd4",
+        "on-primary": "#ffffff",
+        "on-primary-fixed": "#002114",
+        "on-tertiary-container": "#cd9d6d",
+        "primary-container": "#1b4332",
+        "surface-container-high": "#e6e9e4",
+        "background": "#f7faf5",
+        "error-container": "#ffdad6",
+        "accent-ochre": "#cd9d6d",
+        "warning": "#7d5700",
+        "warning-container": "#ffdea3"
+      },
+      borderRadius: {
+        "DEFAULT": "0.25rem",
+        "lg": "0.5rem",
+        "xl": "0.75rem",
+        "full": "9999px"
+      },
+      spacing: {
+        "unit": "8px",
+        "container-max": "1200px",
+        "stack-sm": "8px",
+        "margin-mobile": "16px",
+        "stack-lg": "32px",
+        "section-gap": "80px",
+        "stack-md": "16px",
+        "gutter": "24px",
+        "margin-desktop": "48px",
+        "section-gap-mobile": "48px"
+      },
+      fontFamily: {
+        "body-lg": ["Plus Jakarta Sans"],
+        "body-sm": ["Plus Jakarta Sans"],
+        "headline-lg-mobile": ["Source Serif 4"],
+        "headline-sm": ["Source Serif 4"],
+        "headline-md": ["Source Serif 4"],
+        "headline-xl": ["Source Serif 4"],
+        "headline-lg": ["Source Serif 4"],
+        "label-sm": ["Plus Jakarta Sans"],
+        "label-md": ["Plus Jakarta Sans"],
+        "body-md": ["Plus Jakarta Sans"]
+      },
+      fontSize: {
+        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+        "headline-lg-mobile": ["30px", { "lineHeight": "38px", "fontWeight": "600" }],
+        "headline-sm": ["22px", { "lineHeight": "28px", "fontWeight": "600" }],
+        "headline-md": ["28px", { "lineHeight": "36px", "fontWeight": "600" }],
+        "headline-xl": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+        "headline-lg": ["36px", { "lineHeight": "44px", "fontWeight": "600" }],
+        "label-sm": ["12px", { "lineHeight": "14px", "letterSpacing": "0.03em", "fontWeight": "600" }],
+        "label-md": ["14px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+      }
+    }
+  }
+}
+</script>
+<style>
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+.material-symbols-outlined.fill {
+  font-variation-settings: 'FILL' 1;
+}
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+@keyframes drawerIn {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+.drawer-slide-in {
+  animation: drawerIn 0.3s ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer-slide-in { animation: none; }
+}
+</style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col antialiased">
+<div id="app"><!-- App mounts here --></div>
+<script src="assets/app.js"></script>
+</body>
+</html>

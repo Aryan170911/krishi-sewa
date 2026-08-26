@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Krishi Sewa - Order Tracking</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&amp;family=Plus+Jakarta+Sans:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline": "#717973",
+                        "outline-muted": "#c1c8c2",
+                        "secondary-container": "#daded9",
+                        "surface-container": "#ecefea",
+                        "surface-variant": "#e1e3df",
+                        "primary-container": "#1b4332",
+                        "on-surface-variant": "#414844",
+                        "surface-container-high": "#e7e9e5",
+                        "inverse-surface": "#2e312f",
+                        "error": "#ba1a1a",
+                        "on-primary-container": "#86af99",
+                        "secondary-fixed-dim": "#c4c7c3",
+                        "on-secondary-fixed-variant": "#444844",
+                        "secondary-fixed": "#e0e3df",
+                        "on-tertiary-fixed": "#2d1600",
+                        "outline-variant": "#c1c8c2",
+                        "surface-container-highest": "#e1e3df",
+                        "inverse-primary": "#a5d0b9",
+                        "on-error-container": "#93000a",
+                        "surface-tint": "#3f6653",
+                        "on-tertiary-container": "#ce9c6e",
+                        "surface-dim": "#d9dad7",
+                        "tertiary-fixed-dim": "#f1bc8b",
+                        "on-primary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "background": "#f8faf6",
+                        "on-background": "#191c1a",
+                        "on-secondary-container": "#5e625e",
+                        "surface-container-low": "#f3f4f0",
+                        "on-tertiary-fixed-variant": "#633f18",
+                        "primary-fixed": "#c1ecd4",
+                        "surface": "#f8faf6",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed": "#ffdcbe",
+                        "on-secondary-fixed": "#181c1a",
+                        "primary": "#012d1d",
+                        "error-container": "#ffdad6",
+                        "inverse-on-surface": "#f0f1ed",
+                        "tertiary": "#3c1f00",
+                        "accent-ochre": "#cd9d6d",
+                        "on-secondary": "#ffffff",
+                        "on-primary-fixed": "#002114",
+                        "tertiary-container": "#56340e",
+                        "on-surface": "#191c1a",
+                        "secondary": "#5b5f5c",
+                        "surface-bright": "#f8faf6",
+                        "on-primary-fixed-variant": "#274e3d",
+                        "on-error": "#ffffff",
+                        "primary-fixed-dim": "#a5d0b9"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-lg": "24px",
+                        "section-gap-mobile": "48px",
+                        "base": "8px",
+                        "stack-md": "16px",
+                        "gutter-mobile": "16px",
+                        "margin-mobile": "16px",
+                        "stack-sm": "8px"
+                    },
+                    "fontFamily": {
+                        "headline-xl": ["\"Source Serif 4\""],
+                        "headline-sm": ["\"Source Serif 4\""],
+                        "headline-md": ["\"Source Serif 4\""],
+                        "label-sm": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "headline-lg": ["\"Source Serif 4\""],
+                        "body-sm": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "headline-xl": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-sm": ["20px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.03em", "fontWeight": "600" }],
+                        "body-lg": ["17px", { "lineHeight": "26px", "fontWeight": "400" }],
+                        "body-md": ["15px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "label-md": ["13px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-lg": ["30px", { "lineHeight": "38px", "fontWeight": "600" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: #f8faf6; color: #191c1a; }
+        .progress-line { width: 2px; background-color: #e1e3df; position: absolute; left: 15px; top: 24px; bottom: 0; z-index: 0; }
+        .progress-node { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 10; position: relative; }
+        .node-completed { background-color: #1b4332; color: #ffffff; }
+        .node-active { background-color: #ffffff; border: 2px solid #1b4332; color: #1b4332; }
+        .node-pending { background-color: #ffffff; border: 2px solid #e1e3df; color: #c1c8c2; }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<header class="bg-surface text-primary font-headline-sm text-headline-sm fixed top-0 w-full z-50 border-b border-outline-variant flex items-center justify-between px-margin-mobile h-16 w-full max-w-full">
+<button aria-label="Menu" class="text-on-surface-variant hover:bg-surface-variant/50 active:scale-95 transition-transform duration-150 p-2 rounded-full">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<div class="font-headline-md text-headline-md text-primary">Krishi Sewa</div>
+<button aria-label="Shopping Cart" class="text-on-surface-variant hover:bg-surface-variant/50 active:scale-95 transition-transform duration-150 p-2 rounded-full">
+<span class="material-symbols-outlined" data-icon="shopping_cart">shopping_cart</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow pt-[80px] pb-section-gap-mobile px-gutter-mobile w-full max-w-md mx-auto flex flex-col gap-stack-lg">
+<!-- Back Navigation -->
+<a class="flex items-center gap-2 text-on-surface-variant font-label-md text-label-md hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">arrow_back</span>
+            Back to Orders
+        </a>
+<!-- Order Summary Card -->
+<div class="bg-surface-container rounded-xl border border-outline-muted p-stack-md flex flex-col gap-stack-sm">
+<div class="flex justify-between items-start">
+<div>
+<h1 class="font-headline-sm text-headline-sm text-primary">Order #KS-8492</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Placed on Oct 12, 2024</p>
+</div>
+<div class="bg-primary-container text-on-primary-container px-3 py-1 rounded-full font-label-sm text-label-sm">
+                    Dispatched
+                </div>
+</div>
+<div class="mt-stack-sm pt-stack-sm border-t border-outline-variant flex gap-4 items-center">
+<img class="w-16 h-16 object-cover rounded-lg border border-outline-muted" data-alt="A close up shot of a burlap sack filled with organic wheat grains, resting on a wooden table in a rustic, well-lit barn setting. The lighting is warm and natural, highlighting the texture of the burlap and the golden hue of the grains. The scene conveys a sense of wholesome, organic agriculture and rural tradition." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC90Pgf8aNda7bjQfJZ8hFjC3oJaaryBht1hEJLUXULFS9r0Pspjby6e_lgvv_mXS7YIsTvuSC_jZ4g_P-ahOxB7YSsq596X2kwI8XqxiSZev2skEecbHl9R_3O3rt1kNJTph-bZUalqn9KA87NtKYhpmYANvVxnM80bgUNCr8dFUWbUFJZqQ5miBevexq928w4gGFdhDmeUoXIc8vZU56uZ7WlKm4swy6x0L1p4n8JCjXTjl0f2N3TgA"/>
+<div class="flex-grow">
+<h2 class="font-label-md text-label-md text-on-surface">Premium Organic Wheat Seeds</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Qty: 2 Bags (50kg)</p>
+</div>
+<div class="font-label-md text-label-md text-primary">₹3,400</div>
+</div>
+</div>
+<!-- Estimated Delivery -->
+<div class="bg-surface-container-low rounded-xl border border-outline-muted p-stack-md flex items-center justify-between">
+<div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-1">Estimated Delivery</p>
+<p class="font-headline-sm text-headline-sm text-primary">Oct 16 - Oct 18</p>
+</div>
+<span class="material-symbols-outlined text-primary-container text-[32px]">local_shipping</span>
+</div>
+<!-- Tracking History -->
+<div class="mt-stack-md">
+<h3 class="font-headline-sm text-headline-sm text-primary mb-stack-md">Tracking History</h3>
+<div class="relative pl-2">
+<div class="progress-line"></div>
+<!-- Step 1: Placed -->
+<div class="flex gap-stack-md mb-stack-lg relative">
+<div class="progress-node node-completed">
+<span class="material-symbols-outlined text-[16px]">check</span>
+</div>
+<div class="flex-grow pt-1">
+<h4 class="font-label-md text-label-md text-on-surface">Order Placed</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">We have received your order.</p>
+<p class="font-label-sm text-label-sm text-outline mt-1">Oct 12, 10:24 AM</p>
+</div>
+</div>
+<!-- Step 2: Processing -->
+<div class="flex gap-stack-md mb-stack-lg relative">
+<div class="progress-node node-completed">
+<span class="material-symbols-outlined text-[16px]">check</span>
+</div>
+<div class="flex-grow pt-1">
+<h4 class="font-label-md text-label-md text-on-surface">Processing</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Your order is being packed at the warehouse.</p>
+<p class="font-label-sm text-label-sm text-outline mt-1">Oct 13, 09:15 AM</p>
+</div>
+</div>
+<!-- Step 3: Dispatched (Active) -->
+<div class="flex gap-stack-md mb-stack-lg relative">
+<div class="progress-node node-active">
+<span class="material-symbols-outlined text-[16px]">local_shipping</span>
+</div>
+<div class="flex-grow pt-1">
+<h4 class="font-label-md text-label-md text-primary">Dispatched</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Your package has left the regional hub.</p>
+<p class="font-label-sm text-label-sm text-outline mt-1">Oct 14, 02:30 PM • In Transit</p>
+</div>
+</div>
+<!-- Step 4: Out for Delivery (Pending) -->
+<div class="flex gap-stack-md mb-stack-lg relative">
+<div class="progress-node node-pending">
+</div>
+<div class="flex-grow pt-1">
+<h4 class="font-label-md text-label-md text-outline-muted">Out for Delivery</h4>
+<p class="font-body-sm text-body-sm text-outline-muted">Pending</p>
+</div>
+</div>
+<!-- Step 5: Delivered (Pending) -->
+<div class="flex gap-stack-md relative">
+<div class="progress-node node-pending">
+</div>
+<div class="flex-grow pt-1">
+<h4 class="font-label-md text-label-md text-outline-muted">Delivered</h4>
+<p class="font-body-sm text-body-sm text-outline-muted">Pending</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Help Action -->
+<div class="mt-stack-lg pt-stack-md border-t border-outline-variant flex justify-center">
+<button class="text-primary font-label-md text-label-md flex items-center gap-2 hover:underline">
+<span class="material-symbols-outlined text-[18px]">help</span>
+                Need help with this order?
+            </button>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container text-on-surface-variant font-label-md text-label-md w-full mt-auto border-t border-outline-variant flex flex-col items-center gap-stack-md py-stack-lg px-margin-mobile text-center">
+<div class="font-headline-sm text-headline-sm text-primary">Krishi Sewa</div>
+<div class="flex gap-stack-md justify-center w-full">
+<a class="text-on-surface-variant hover:text-primary transition-colors opacity-90 hover:opacity-100" href="#">Privacy Policy</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors opacity-90 hover:opacity-100" href="#">Terms of Service</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors opacity-90 hover:opacity-100" href="#">Contact Us</a>
+</div>
+<div class="text-outline mt-2 text-[11px]">© 2024 Krishi Sewa Foundation. Supporting our farmers.</div>
+</footer>
+</body></html>

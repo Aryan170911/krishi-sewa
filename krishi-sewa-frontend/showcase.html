@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Krishi Sewa — Desktop & Mobile Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    background: #0f1a14;
+    color: #e8ede9;
+    min-height: 100vh;
+  }
+  .showcase-header {
+    text-align: center;
+    padding: 48px 24px 32px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .showcase-header h1 {
+    font-family: "Source Serif 4", serif;
+    font-size: clamp(28px, 4vw, 42px);
+    font-weight: 700;
+    color: #c1ecd4;
+    margin-bottom: 8px;
+  }
+  .showcase-header p {
+    color: #86af99;
+    font-size: 15px;
+    max-width: 560px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+  .badge-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    background: rgba(193,236,212,0.12);
+    color: #a5d0b9;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(193,236,212,0.2);
+  }
+  .devices {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 48px;
+    padding: 48px 24px 64px;
+    flex-wrap: wrap;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+  .device {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .device-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #717973;
+  }
+  .device-label span {
+    color: #cd9d6d;
+  }
+  /* Desktop frame */
+  .desktop-frame {
+    width: min(960px, 90vw);
+    background: #1b4332;
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
+  }
+  .desktop-chrome {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px 12px;
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot-r { background: #ff5f57; }
+  .dot-y { background: #febc2e; }
+  .dot-g { background: #28c840; }
+  .url-bar {
+    flex: 1;
+    background: rgba(0,0,0,0.3);
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: #86af99;
+    margin-left: 8px;
+  }
+  .desktop-frame iframe {
+    width: 100%;
+    height: 620px;
+    border: none;
+    border-radius: 6px;
+    background: #f7faf5;
+  }
+  /* Mobile frame */
+  .mobile-frame {
+    width: 390px;
+    background: #2d312e;
+    border-radius: 44px;
+    padding: 14px;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08), inset 0 0 0 2px rgba(255,255,255,0.04);
+    position: relative;
+  }
+  .mobile-notch {
+    width: 120px;
+    height: 28px;
+    background: #2d312e;
+    border-radius: 0 0 20px 20px;
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+  }
+  .mobile-frame iframe {
+    width: 100%;
+    height: 780px;
+    border: none;
+    border-radius: 32px;
+    background: #f7faf5;
+    display: block;
+  }
+  .actions {
+    text-align: center;
+    padding: 0 24px 48px;
+  }
+  .actions a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #012d1d;
+    color: #c1ecd4;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 14px 28px;
+    border-radius: 10px;
+    border: 1px solid rgba(193,236,212,0.2);
+    transition: background 0.2s;
+  }
+  .actions a:hover { background: #1b4332; }
+  .page-nav {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+  .page-nav button {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #a5d0b9;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .page-nav button:hover, .page-nav button.active {
+    background: #1b4332;
+    border-color: #86af99;
+    color: #c1ecd4;
+  }
+  @media (max-width: 900px) {
+    .devices { flex-direction: column; align-items: center; }
+    .desktop-frame { width: 100%; }
+    .mobile-frame { width: min(390px, 90vw); }
+  }
+</style>
+</head>
+<body>
+<header class="showcase-header">
+  <h1>Krishi Sewa Foundation</h1>
+  <p>Unified responsive frontend built from Google Stitch UI/UX designs — one codebase, adaptive layouts for desktop and mobile.</p>
+  <div class="badge-row">
+    <span class="badge">Heritage Harvest Design System</span>
+    <span class="badge">Material 3</span>
+    <span class="badge">Source Serif 4 + Plus Jakarta Sans</span>
+    <span class="badge">Single SPA</span>
+  </div>
+</header>
+
+<div class="actions">
+  <div class="page-nav" id="pageNav">
+    <button class="active" data-page="home">Home</button>
+    <button data-page="shop">Shop</button>
+    <button data-page="cart">Cart</button>
+    <button data-page="checkout">Checkout</button>
+    <button data-page="orders">Orders</button>
+    <button data-page="about">About</button>
+  </div>
+  <a href="index.html" target="_blank">Open Full App ↗</a>
+</div>
+
+<div class="devices">
+  <div class="device">
+    <div class="device-label"><span>●</span> Desktop — 960px</div>
+    <div class="desktop-frame">
+      <div class="desktop-chrome">
+        <div class="dot dot-r"></div>
+        <div class="dot dot-y"></div>
+        <div class="dot dot-g"></div>
+        <div class="url-bar">krishisewa.org/#home</div>
+      </div>
+      <iframe id="desktopFrame" src="index.html#home" title="Desktop preview"></iframe>
+    </div>
+  </div>
+
+  <div class="device">
+    <div class="device-label"><span>●</span> Mobile — 390px</div>
+    <div class="mobile-frame">
+      <div class="mobile-notch"></div>
+      <iframe id="mobileFrame" src="index.html#home" title="Mobile preview"></iframe>
+    </div>
+  </div>
+</div>
+
+<script>
+  const pageNav = document.getElementById('pageNav');
+  const desktopFrame = document.getElementById('desktopFrame');
+  const mobileFrame = document.getElementById('mobileFrame');
+
+  pageNav.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-page]');
+    if (!btn) return;
+    const page = btn.dataset.page;
+    pageNav.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const hash = `#${page}`;
+    desktopFrame.src = `index.html${hash}`;
+    mobileFrame.src = `index.html${hash}`;
+  });
+</script>
+</body>
+</html>

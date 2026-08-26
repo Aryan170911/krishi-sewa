@@ -1,0 +1,16 @@
+user:
+  name: "Aryan"
+  github: "Aryan170911"
+
+runtime:
+  image: "node:20-slim"
+
+commands:
+  package: ""
+  build:
+    - "cd server && npm install"
+  start: "node server/server.js"
+
+repository:
+  branch: "main"
+  auto_deploy: true

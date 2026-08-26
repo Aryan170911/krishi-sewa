@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+stitch_krishi_sewa_foundation_hub
+krishi-sewa-frontend.zip
+*.log
+.DS_Store
+calculator.py

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Krishi Sewa — Admin Panel</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
+<script id="tailwind-config">
+tailwind.config = {
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        "surface-container-low": "#f1f4f0",
+        "secondary-container": "#e8dfc5",
+        "primary-container": "#1b4332",
+        "on-primary-container": "#86af99",
+        "error": "#ba1a1a",
+        "on-surface": "#191c1a",
+        "primary": "#012d1d",
+        "on-primary": "#ffffff",
+        "surface": "#f7faf5",
+        "outline-variant": "#c1c8c2",
+        "outline": "#717973",
+        "surface-variant": "#e0e3df",
+        "on-surface-variant": "#414844",
+        "background": "#f7faf5",
+        "accent-ochre": "#cd9d6d",
+      },
+      fontFamily: {
+        "headline-lg": ["Source Serif 4"],
+        "headline-md": ["Source Serif 4"],
+        "body-md": ["Plus Jakarta Sans"]
+      }
+    }
+  }
+}
+</script>
+<style>
+.material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+.material-symbols-outlined.fill { font-variation-settings: 'FILL' 1; }
+</style>
+</head>
+<body class="bg-background text-on-surface min-h-screen flex flex-col font-body-md antialiased">
+<!-- Login Screen -->
+<div id="loginScreen" class="min-h-screen flex items-center justify-center bg-background p-4">
+  <div class="bg-white border border-outline-variant rounded-2xl p-8 w-full max-w-md shadow-sm">
+    <div class="text-center mb-8">
+      <div class="w-14 h-14 bg-primary rounded-xl flex items-center justify-center mx-auto mb-4">
+        <span class="material-symbols-outlined text-on-primary text-3xl">shield</span>
+      </div>
+      <h1 class="font-headline-lg text-3xl font-bold text-primary">Admin Panel</h1>
+      <p class="text-on-surface-variant mt-2">Krishi Sewa Foundation</p>
+    </div>
+    <form id="loginForm" class="space-y-4" onsubmit="handleLogin(event)">
+      <div>
+        <label class="block text-sm font-semibold text-on-surface mb-1">Username</label>
+        <input id="loginUser" class="w-full bg-surface border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:ring-1 focus:ring-primary outline-none" placeholder="admin" value="admin" required>
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-on-surface mb-1">Password</label>
+        <input id="loginPass" type="password" class="w-full bg-surface border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:ring-1 focus:ring-primary outline-none" placeholder="admin123" value="admin123" required>
+      </div>
+      <p id="loginError" class="text-error text-sm hidden"></p>
+      <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-semibold hover:bg-primary-container transition-colors flex items-center justify-center gap-2">
+        <span class="material-symbols-outlined">login</span> Login
+      </button>
+      <p class="text-center text-xs text-on-surface-variant">Demo: <b>admin</b> / <b>admin123</b></p>
+    </form>
+  </div>
+</div>
+
+<!-- Admin App -->
+<div id="adminApp" class="hidden min-h-screen flex flex-col">
+  <!-- Topbar -->
+  <header class="bg-white border-b border-outline-variant sticky top-0 z-40">
+    <div class="max-w-[1400px] mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 bg-primary rounded-lg flex items-center justify-center">
+          <span class="material-symbols-outlined text-on-primary">eco</span>
+        </div>
+        <div>
+          <h1 class="font-bold text-primary leading-none">Krishi Sewa</h1>
+          <p class="text-xs text-on-surface-variant">Admin Panel</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="/" class="hidden md:flex items-center gap-1 text-sm text-on-surface-variant hover:text-primary px-3 py-2 rounded-lg hover:bg-surface-variant transition-colors">
+          <span class="material-symbols-outlined text-[18px]">storefront</span> View Store
+        </a>
+        <button onclick="handleLogout()" class="flex items-center gap-1 bg-surface border border-outline-variant px-4 py-2 rounded-lg text-sm font-semibold hover:bg-surface-variant transition-colors">
+          <span class="material-symbols-outlined text-[18px]">logout</span> Logout
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="flex flex-1 max-w-[1400px] mx-auto w-full">
+    <!-- Sidebar -->
+    <aside class="hidden md:flex flex-col w-56 border-r border-outline-variant bg-white p-4 gap-2 sticky top-16 h-[calc(100vh-4rem)]">
+      <button data-tab="dashboard" class="admin-tab active flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-semibold bg-primary text-on-primary">
+        <span class="material-symbols-outlined text-[20px]">dashboard</span> Dashboard
+      </button>
+      <button data-tab="products" class="admin-tab flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-semibold text-on-surface-variant hover:bg-surface-variant">
+        <span class="material-symbols-outlined text-[20px]">inventory_2</span> Products
+      </button>
+      <button data-tab="orders" class="admin-tab flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-semibold text-on-surface-variant hover:bg-surface-variant">
+        <span class="material-symbols-outlined text-[20px]">receipt_long</span> Orders
+      </button>
+      <div class="mt-auto pt-4 border-t border-outline-variant text-xs text-on-surface-variant">
+        <p>API: <span id="apiStatus" class="text-primary font-semibold">● Connected</span></p>
+        <p class="mt-1">Backend: <span class="font-mono">/api</span></p>
+      </div>
+    </aside>
+
+    <!-- Mobile tabs -->
+    <div class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-outline-variant flex z-30">
+      <button data-tab="dashboard" class="admin-tab-mobile active flex-1 flex flex-col items-center py-2 text-primary"><span class="material-symbols-outlined">dashboard</span><span class="text-[10px] font-semibold">Dashboard</span></button>
+      <button data-tab="products" class="admin-tab-mobile flex-1 flex flex-col items-center py-2 text-on-surface-variant"><span class="material-symbols-outlined">inventory_2</span><span class="text-[10px] font-semibold">Products</span></button>
+      <button data-tab="orders" class="admin-tab-mobile flex-1 flex flex-col items-center py-2 text-on-surface-variant"><span class="material-symbols-outlined">receipt_long</span><span class="text-[10px] font-semibold">Orders</span></button>
+    </div>
+
+    <!-- Content -->
+    <main class="flex-1 p-4 md:p-6 pb-20 md:pb-6 bg-background">
+      <!-- Dashboard -->
+      <section id="tab-dashboard" class="admin-section">
+        <h2 class="text-2xl font-bold text-primary mb-1">Dashboard</h2>
+        <p class="text-on-surface-variant mb-6">Overview of your store</p>
+        <div id="statsGrid" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <!-- stats injected -->
+        </div>
+        <div class="bg-white border border-outline-variant rounded-xl p-6">
+          <h3 class="font-bold text-primary mb-4 flex items-center gap-2"><span class="material-symbols-outlined">insights</span> Quick Actions</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <button onclick="switchTab('products')" class="bg-primary text-on-primary p-4 rounded-xl text-left hover:opacity-90 transition-opacity">
+              <span class="material-symbols-outlined">add_box</span>
+              <p class="font-semibold mt-1">Add Product</p>
+              <p class="text-sm opacity-80">Create new seed/tool listing</p>
+            </button>
+            <button onclick="switchTab('orders')" class="bg-secondary-container text-on-surface p-4 rounded-xl text-left hover:opacity-90 transition-colors border border-outline-variant">
+              <span class="material-symbols-outlined">local_shipping</span>
+              <p class="font-semibold mt-1">Manage Orders</p>
+              <p class="text-sm opacity-70">Update status & track</p>
+            </button>
+            <a href="/" class="bg-white border border-outline-variant p-4 rounded-xl text-left hover:bg-surface-variant transition-colors">
+              <span class="material-symbols-outlined">visibility</span>
+              <p class="font-semibold mt-1">View Store</p>
+              <p class="text-sm text-on-surface-variant">See customer view</p>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Products -->
+      <section id="tab-products" class="admin-section hidden">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-primary">Products</h2>
+            <p class="text-on-surface-variant">Manage inventory — edits persist to server/data/products.json</p>
+          </div>
+          <button onclick="openProductModal()" class="bg-primary text-on-primary px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 hover:bg-primary-container transition-colors">
+            <span class="material-symbols-outlined">add</span> Add Product
+          </button>
+        </div>
+        <div id="productsTableWrap" class="bg-white border border-outline-variant rounded-xl overflow-hidden">
+          <!-- table injected -->
+        </div>
+      </section>
+
+      <!-- Orders -->
+      <section id="tab-orders" class="admin-section hidden">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-primary">Orders</h2>
+            <p class="text-on-surface-variant">All customer orders from <code class="bg-surface-variant px-1 rounded">data/orders.json</code></p>
+          </div>
+          <button onclick="loadOrders()" class="border border-outline-variant px-4 py-2 rounded-lg text-sm font-semibold hover:bg-surface-variant flex items-center gap-1">
+            <span class="material-symbols-outlined text-[18px]">refresh</span> Refresh
+          </button>
+        </div>
+        <div id="ordersTableWrap" class="space-y-3">
+          <!-- orders injected -->
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- Product Modal -->
+<div id="productModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-auto">
+    <div class="sticky top-0 bg-white border-b border-outline-variant p-6 flex items-center justify-between">
+      <h3 id="productModalTitle" class="text-xl font-bold text-primary">Add Product</h3>
+      <button onclick="closeProductModal()" class="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <form id="productForm" class="p-6 space-y-4" onsubmit="handleProductSubmit(event)">
+      <input type="hidden" id="productId">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold mb-1">Name *</label>
+          <input id="productName" required class="w-full border border-outline-variant rounded-lg px-3 py-2.5 focus:border-primary focus:ring-1 focus:ring-primary outline-none" placeholder="Heirloom Tomato Seeds">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1">Price (₹) *</label>
+          <input id="productPrice" type="number" required min="0" class="w-full border border-outline-variant rounded-lg px-3 py-2.5 focus:border-primary outline-none" placeholder="350">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1">Original Price (₹)</label>
+          <input id="productOriginalPrice" type="number" min="0" class="w-full border border-outline-variant rounded-lg px-3 py-2.5 focus:border-primary outline-none" placeholder="450">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1">Category</label>
+          <select id="productCategory" class="w-full border border-outline-variant rounded-lg px-3 py-2.5 focus:border-primary outline-none">
+            <option value="seeds">Seeds</option>
+            <option value="fertilizers">Fertilizers</option>
+            <option value="tools">Tools & Equipment</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1">In Stock?</label>
+          <select id="productInStock" class="w-full border border-outline-variant rounded-lg px-3 py-2.5 focus:border-primary outline-none">
+            <option value="true">Yes — In Stock</option>
+            <option value="false">No — Out of Stock</option>
+          </select>
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold mb-1">Image URL</label>
+          <input id="productImage" class="w-full border border-outline-variant rounded-lg px-3 py-2.5 focus:border-primary outline-none" placeholder="https://...">
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold mb-1">Short Description</label>
+          <input id="productShortDesc" class="w-full border border-outline-variant rounded-lg px-3 py-2.5 focus:border-primary outline-none" placeholder="Variety: ... • Approx. 50 seeds">
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold mb-1">Description</label>
+          <textarea id="productDesc" rows="3" class="w-full border border-outline-variant rounded-lg px-3 py-2.5 focus:border-primary outline-none" placeholder="Full description..."></textarea>
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold mb-1">Tags (comma separated)</label>
+          <input id="productTags" class="w-full border border-outline-variant rounded-lg px-3 py-2.5 focus:border-primary outline-none" placeholder="heirloom, organic, non-gmo">
+        </div>
+      </div>
+      <p id="productFormError" class="text-error text-sm hidden"></p>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeProductModal()" class="flex-1 border border-outline-variant py-3 rounded-lg font-semibold hover:bg-surface-variant">Cancel</button>
+        <button type="submit" class="flex-1 bg-primary text-on-primary py-3 rounded-lg font-semibold hover:bg-primary-container">Save Product</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-primary text-on-primary px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 text-sm font-semibold">
+  <span class="material-symbols-outlined">check_circle</span><span id="toastMsg"></span>
+</div>
+
+<script src="assets/admin.js"></script>
+</body>
+</html>

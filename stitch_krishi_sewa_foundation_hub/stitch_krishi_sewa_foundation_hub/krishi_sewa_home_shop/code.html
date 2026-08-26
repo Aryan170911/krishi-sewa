@@ -1,0 +1,302 @@
+<!DOCTYPE html><html lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Krishi Sewa Foundation</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600&amp;family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-low": "#f1f4f0",
+                        "on-error": "#ffffff",
+                        "secondary-container": "#e8dfc5",
+                        "tertiary-container": "#56340e",
+                        "on-secondary": "#ffffff",
+                        "tertiary-fixed": "#ffdcbd",
+                        "on-primary-container": "#86af99",
+                        "tertiary-fixed-dim": "#f0bd8b",
+                        "on-secondary-container": "#68634d",
+                        "on-primary-fixed-variant": "#274e3d",
+                        "error": "#ba1a1a",
+                        "on-surface": "#191c1a",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed": "#2c1600",
+                        "primary-fixed-dim": "#a5d0b9",
+                        "surface-container": "#ecefea",
+                        "inverse-on-surface": "#eff2ed",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-highest": "#e0e3df",
+                        "on-background": "#191c1a",
+                        "inverse-primary": "#a5d0b9",
+                        "surface-dim": "#d8dbd6",
+                        "outline-variant": "#c1c8c2",
+                        "surface": "#f7faf5",
+                        "outline": "#717973",
+                        "secondary-fixed": "#ebe2c8",
+                        "surface-variant": "#e0e3df",
+                        "secondary-fixed-dim": "#cec6ad",
+                        "on-tertiary-fixed-variant": "#623f18",
+                        "primary": "#012d1d",
+                        "surface-tint": "#3f6653",
+                        "secondary": "#645e49",
+                        "on-secondary-fixed-variant": "#4c4733",
+                        "on-secondary-fixed": "#1f1c0b",
+                        "surface-bright": "#f7faf5",
+                        "on-surface-variant": "#414844",
+                        "inverse-surface": "#2d312e",
+                        "on-error-container": "#93000a",
+                        "tertiary": "#3b1f00",
+                        "primary-fixed": "#c1ecd4",
+                        "on-primary": "#ffffff",
+                        "on-primary-fixed": "#002114",
+                        "on-tertiary-container": "#cd9d6d",
+                        "primary-container": "#1b4332",
+                        "surface-container-high": "#e6e9e4",
+                        "background": "#f7faf5",
+                        "error-container": "#ffdad6"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "8px",
+                        "container-max": "1200px",
+                        "stack-sm": "8px",
+                        "margin-mobile": "16px",
+                        "stack-lg": "32px",
+                        "section-gap": "80px",
+                        "stack-md": "16px",
+                        "gutter": "24px",
+                        "margin-desktop": "48px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "body-sm": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["\"Source Serif 4\""],
+                        "headline-sm": ["\"Source Serif 4\""],
+                        "headline-md": ["\"Source Serif 4\""],
+                        "headline-xl": ["\"Source Serif 4\""],
+                        "headline-lg": ["\"Source Serif 4\""],
+                        "label-sm": ["Plus Jakarta Sans"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["30px", { "lineHeight": "38px", "fontWeight": "600" }],
+                        "headline-sm": ["22px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-md": ["28px", { "lineHeight": "36px", "fontWeight": "600" }],
+                        "headline-xl": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-lg": ["36px", { "lineHeight": "44px", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "14px", "letterSpacing": "0.03em", "fontWeight": "600" }],
+                        "label-md": ["14px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-surface text-on-surface font-body-md min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<nav class="bg-surface border-b border-outline-variant w-full sticky top-0 z-50">
+<div class="flex justify-between items-center px-margin-mobile md:px-margin-desktop py-4 max-w-container-max mx-auto"><button class="flex items-center justify-center text-primary mr-4" aria-label="Menu">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M3 18H21V16H3V18ZM3 13H21V11H3V13ZM3 6V8H21V6H3Z" fill="currentColor"></path>
+  </svg>
+</button>
+<div class="flex items-center gap-2">
+<img alt="Krishi Sewa Logo" class="h-12 w-12 object-contain rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBF6Fq8gWupDVI3YtDEp9zU7BJ10DWGGMGRgV6V_CJC5ylhJK5QnKOZa_c_uiqiYaFa_k7zQSoEPJO0g_K2sgk9BbOYhN61yksiAklculAF9sEm1IMPhcjamZXKHF0zsX1VioUZcbxUcMIwdIefi2oZVLcEOmax1DE8DHEhcQXZmgdIVWIbIES5p7TlzlSKDGcAo5z_OInWa0dFsTj3YNkZGY4ugX-hHVeKNSW6Wn8yhq-0pWwLVkMqutn4hVCaREl2o20">
+<span class="font-headline-md text-headline-md font-bold text-primary">Krishi Sewa</span>
+</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200 font-label-md text-label-md" href="#">Home</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200 font-label-md text-label-md" href="#">News</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200 font-label-md text-label-md" href="#">Events</a>
+<a class="text-primary border-b-2 border-primary pb-1 font-bold font-label-md text-label-md" href="#">Shop</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200 font-label-md text-label-md" href="#">About Us</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="hidden md:flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-weight="fill" style="font-variation-settings: &quot;FILL&quot; 1;">search</span>
+</button>
+<button class="hidden md:flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors relative">
+<span class="material-symbols-outlined">shopping_cart</span>
+<span class="absolute -top-2 -right-2 bg-error text-on-error text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">3</span>
+</button>
+<button class="bg-primary text-on-primary font-label-md text-label-md px-6 py-2 rounded-lg hover:opacity-90 transition-opacity">Sign in / Log in</button>
+<button class="md:hidden text-on-surface-variant">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</div>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="flex-grow">
+<!-- Hero Slideshow -->
+<section class="relative w-full h-[60vh] min-h-[450px] bg-black overflow-hidden">
+<img alt="Farming Landscape" class="absolute inset-0 w-full h-full object-cover opacity-60" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQ6cUvtj8WodsqLTV5R7vtGLmcsjRno8v9tjXVw9ssfkcHcHXh3k6gmJWsED85Re1pcwgmpixWJN5n0yrUVtIMz7bHKdCY1NV75SmqrNQZp5Y8ZHIqN6WDDBo9GyIyBLGL11-OATk2tTWJqHqzqaeMsMbxNKrGh6NcFTYsPAgBFsjY6vTe4YoIPeYWZTjc8CClnXJBu-5gQ303-kY6HTOKvsHiVK0WCMs2XzfsDAPkXWkd8zFNBlEKdQ">
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col items-center justify-center text-center p-6">
+<span class="inline-block bg-primary text-on-primary font-label-sm text-label-sm px-3 py-1 rounded-full mb-4">Latest News: Spring Harvest Begins</span>
+<h1 class="text-on-primary font-headline-xl text-headline-xl mb-stack-md max-w-4xl leading-tight">Cultivating Growth, Empowering Communities.</h1>
+<p class="text-surface-container-low font-body-lg text-body-lg max-w-2xl mb-8">Support sustainable agriculture and local farmers through our community-driven marketplace and foundation resources.</p>
+</div>
+<!-- Carousel Controls -->
+<button class="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center hover:bg-white/40 backdrop-blur-sm transition-colors">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center hover:bg-white/40 backdrop-blur-sm transition-colors">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+<!-- Carousel Dots -->
+<div class="absolute bottom-6 left-0 right-0 flex justify-center gap-2">
+<div class="w-2.5 h-2.5 rounded-full bg-white cursor-pointer"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-white/40 cursor-pointer hover:bg-white/60"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-white/40 cursor-pointer hover:bg-white/60"></div>
+</div>
+</section>
+<!-- Navigation Buttons -->
+<section class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop pt-stack-lg pb-stack-md">
+<div class="flex flex-col sm:flex-row justify-center gap-4">
+<button class="px-10 py-4 bg-primary text-on-primary rounded-lg font-headline-sm text-headline-sm shadow-md sm:w-56 text-center transition-transform hover:-translate-y-1 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">storefront</span> Shop with us</button>
+<a class="px-10 py-4 bg-surface-container-high border border-outline-variant text-on-surface rounded-lg font-headline-sm text-headline-sm hover:bg-surface-variant transition-colors sm:w-56 text-center block flex items-center justify-center gap-2" href="#register">
+<span class="material-symbols-outlined">how_to_reg</span>&nbsp;Register with us</a>
+</div>
+</section>
+<!-- E-commerce Storefront -->
+<section class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop pb-section-gap">
+<div class="flex flex-col md:flex-row justify-between items-end mb-stack-lg border-b border-outline-variant pb-4">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-primary mb-2">Our Store</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Sustainable produce, seeds, and handcrafted farming tools.</p>
+</div>
+<!-- Categories -->
+<div class="flex gap-2 mt-4 md:mt-0 overflow-x-auto pb-2 w-full md:w-auto">
+<button class="px-5 py-1.5 rounded-full bg-primary text-on-primary font-label-md text-label-md whitespace-nowrap shadow-sm">All</button>
+<button class="px-5 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-highest text-on-surface font-label-md text-label-md whitespace-nowrap transition-colors">Seeds</button>
+<button class="px-5 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-highest text-on-surface font-label-md text-label-md whitespace-nowrap transition-colors">Tools</button>
+<button class="px-5 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-highest text-on-surface font-label-md text-label-md whitespace-nowrap transition-colors">Fertilizers</button>
+</div>
+</div>
+<!-- Products Grid -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-gutter">
+<!-- Product Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden group hover:shadow-lg transition-all duration-300 flex flex-col">
+<div class="h-56 w-full relative overflow-hidden bg-surface-container">
+<img alt="Heirloom Tomato Seeds" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBBmkGXxz3JN97V7vFLF0uwTGDJWsW2q_MUd9Dshrv0aP-fYD09cNtKE_YCeTNoVR4occGqw-ptyJbNHjWzGcMsDl_HY4jFutfW4cXtSNsCKRFsJKPgdhtWkAvcLUCPSPESC6CZ4wciLieEXGqHn3RVYVk7ZJNlmksEwOJeg452E-hyYKccF5WNhLHR_Ed19NrE-uwzu3T0kK3OUONpEDHM3zkm4jQSy07QaKKhP6MeCcr0Bpcgag0TJw">
+<span class="absolute top-3 left-3 bg-secondary-container text-on-secondary-container text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Seeds</span>
+</div>
+<div class="p-5 flex flex-col flex-grow">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-2 leading-tight group-hover:text-primary transition-colors">Heirloom Tomato Seeds</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-6 flex-grow line-clamp-2">Organic, high-yield variety suitable for various climates. Hand-selected for premium quality.</p>
+<div class="flex justify-between items-center mt-auto">
+<div class="flex flex-col"><span class="font-body-sm text-body-sm text-outline line-through text-xs">₹499</span><span class="font-headline-md text-headline-md text-primary">₹399</span></div>
+<button class="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center hover:bg-primary-container transition-colors shadow-sm">
+<span class="material-symbols-outlined text-sm">add_shopping_cart</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Product Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden group hover:shadow-lg transition-all duration-300 flex flex-col">
+<div class="h-56 w-full relative overflow-hidden bg-surface-container">
+<img alt="Handcrafted Trowel" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD5rvgxxQGdQo_H3gf1lJ2SbaHjaXJTglaZbRQDEGa3tpLWTKkAWpvRx8W12AFpXgmiWuuExw6espC6oclOeuv9F1c6jqCgDZZLcPciOvoAmkheD07Q-CdqoTkfQAfYH9r0i4QiyEWpEyR-zYSdap9xwar4xPoDA3tSteOjgtUQaEZHDsqqUOihbevSwwN5PfQPEhr1ADhVvh87V7lT_eh5kED1wpOqOflXF6BQxw0fDhoafP3MVad8sA">
+<span class="absolute top-3 left-3 bg-secondary-container text-on-secondary-container text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Tools</span>
+</div>
+<div class="p-5 flex flex-col flex-grow">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-2 leading-tight group-hover:text-primary transition-colors">Artisan Hand Trowel</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-6 flex-grow line-clamp-2">Durable forged steel with a comfortable ergonomic wooden handle, made by local blacksmiths.</p>
+<div class="flex justify-between items-center mt-auto">
+<div class="flex flex-col"><span class="font-body-sm text-body-sm text-outline line-through text-xs">₹2,450</span><span class="font-headline-md text-headline-md text-primary">₹1,999</span></div>
+<button class="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center hover:bg-primary-container transition-colors shadow-sm">
+<span class="material-symbols-outlined text-sm">add_shopping_cart</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Product Card 3 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden group hover:shadow-lg transition-all duration-300 flex flex-col">
+<div class="h-56 w-full relative overflow-hidden bg-surface-container">
+<img alt="Organic Compost" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDdrBiVYtK6YtDG78-5eG1ElSqwnA9VT-xcostHm6oxH5Qc8Hv2bLsGEwZX38uXbHLvsLIexULR9t2GL25rlvUXM_qprFfgOqA4wf1cVO4m7JV0q8nrHiyvIbZHZXMNSgvc7BsFj-3byUogdWjYVdmez5i4XYP6ucU0coLKqnCrfL0_j7sxL2NQvK5lc-jADj4nj37EVqNPCbl-Cwsl60ZZQXk3PpLplnPpG2hgR5PUOGmDf9mmcVClqg">
+<span class="absolute top-3 left-3 bg-secondary-container text-on-secondary-container text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Fertilizers</span>
+</div>
+<div class="p-5 flex flex-col flex-grow">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-2 leading-tight group-hover:text-primary transition-colors">Premium Organic Compost</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-6 flex-grow line-clamp-2">Nutrient-rich blend to revitalize your soil and promote vigorous plant growth naturally.</p>
+<div class="flex justify-between items-center mt-auto">
+<div class="flex flex-col"><span class="font-body-sm text-body-sm text-outline line-through text-xs">₹1,800</span><span class="font-headline-md text-headline-md text-primary">₹1,499</span></div>
+<button class="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center hover:bg-primary-container transition-colors shadow-sm">
+<span class="material-symbols-outlined text-sm">add_shopping_cart</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Product Card 4 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden group hover:shadow-lg transition-all duration-300 flex flex-col">
+<div class="h-56 w-full relative overflow-hidden bg-surface-container">
+<img alt="Woven Harvest Basket" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDdKnlppZlXqhysy7Y3geTrIV6TtICb5RNLiIvq8adyWkLYGogZUwTF4Dy2tqEuviizU-BHhzNriLSOeYdvF5nCQcwo9areAP-8P_s85qI1IvvQW9x2T_uXawpLE2kFq3v--vqNtUCFyeHdbrctPEpM9BE0hk3_txAGFLmGy4xkqeVs3Gb4yqdHLUkFFjg-PaWJ0dAlq2Z4Ra4tdyHV9RH5hhCZLTlsn_Hdwx6U3L3UqE_hD1XgIRcAnQ">
+<span class="absolute top-3 left-3 bg-secondary-container text-on-secondary-container text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Tools</span>
+<span class="absolute top-3 right-3 bg-error text-on-error text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Sale</span>
+</div>
+<div class="p-5 flex flex-col flex-grow">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-2 leading-tight group-hover:text-primary transition-colors">Woven Harvest Basket</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-6 flex-grow line-clamp-2">Traditional handmade cane basket perfect for collecting your daily garden harvest.</p>
+<div class="flex justify-between items-center mt-auto">
+<div class="flex flex-col"><span class="font-body-sm text-body-sm text-outline line-through text-xs">₹3,500</span><span class="font-headline-md text-headline-md text-error">₹2,800</span></div>
+<button class="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center hover:bg-primary-container transition-colors shadow-sm">
+<span class="material-symbols-outlined text-sm">add_shopping_cart</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-12 text-center">
+<button class="bg-surface-container border border-outline-variant text-primary font-label-md text-label-md px-8 py-3 rounded-lg hover:bg-surface-variant transition-colors inline-flex items-center gap-2">
+                View All Products <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-primary text-on-primary w-full mt-auto">
+<div class="flex flex-col md:flex-row justify-between items-start px-margin-mobile md:px-margin-desktop py-section-gap max-w-container-max mx-auto">
+<div class="mb-8 md:mb-0">
+<div class="font-headline-sm text-headline-sm font-bold text-on-primary mb-4 flex items-center gap-3">
+<img alt="Krishi Sewa Logo" class="h-8 w-8 object-contain rounded-full bg-white/20 p-1" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOr34h7-05LJj6ziKq0j4HeNXCXpKstF-qXffXMMSMtSJu-3BNyIO8lf1QStYuorvT4-GZPTcgoNiZp8LhEt6dO0rmNHSYmY0KYXYIztRahd7uZpnql0a7p6vtsxNv-QhosntiWFsJyFDYWkqxXnACahpmLJlcGCkrHRE0t8kL6cmfqslaNHn1osrbTgolglqfjNCDeyI89uYBVUzZ8Rwzv4GCq51rr8AlR5YTSeOJioW3lyv6ee6EvXjjN20GmBfv4I0">
+                    Krishi Sewa founation</div>
+<p class="font-body-md text-body-md opacity-80 max-w-xs">Cultivating Growth, Empowering Communities.</p>
+<p class="font-label-sm text-label-sm opacity-60 mt-4">© 2026 Krishi Sewa Foundation.</p>
+</div>
+<div class="flex flex-col md:flex-row gap-8 md:gap-16">
+<div class="flex flex-col gap-3">
+<a class="font-label-sm text-label-sm text-on-primary opacity-80 hover:opacity-100 hover:underline transition-all" href="#">Mission</a>
+<a class="font-label-sm text-label-sm text-on-primary opacity-80 hover:opacity-100 hover:underline transition-all" href="#">Privacy Policy</a>
+</div>
+<div class="flex flex-col gap-3">
+<a class="font-label-sm text-label-sm text-on-primary opacity-80 hover:opacity-100 hover:underline transition-all" href="#">Contact Support</a>
+<a class="font-label-sm text-label-sm text-on-primary opacity-80 hover:opacity-100 hover:underline transition-all" href="#">Terms of Service</a>
+</div>
+</div>
+</div>
+</footer>
+
+
+
+
+
+
+
+
+
+
+</body></html>

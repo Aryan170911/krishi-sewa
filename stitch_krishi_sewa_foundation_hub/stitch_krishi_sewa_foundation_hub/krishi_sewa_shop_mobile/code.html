@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Krishi Sewa Shop</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Source Serif 4 & Plus Jakarta Sans -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600&amp;family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "outline": "#717973",
+                      "outline-muted": "#c1c8c2",
+                      "secondary-container": "#daded9",
+                      "surface-container": "#ecefea",
+                      "surface-variant": "#e1e3df",
+                      "primary-container": "#1b4332",
+                      "on-surface-variant": "#414844",
+                      "surface-container-high": "#e7e9e5",
+                      "inverse-surface": "#2e312f",
+                      "error": "#ba1a1a",
+                      "on-primary-container": "#86af99",
+                      "secondary-fixed-dim": "#c4c7c3",
+                      "on-secondary-fixed-variant": "#444844",
+                      "secondary-fixed": "#e0e3df",
+                      "on-tertiary-fixed": "#2d1600",
+                      "outline-variant": "#c1c8c2",
+                      "surface-container-highest": "#e1e3df",
+                      "inverse-primary": "#a5d0b9",
+                      "on-error-container": "#93000a",
+                      "surface-tint": "#3f6653",
+                      "on-tertiary-container": "#ce9c6e",
+                      "surface-dim": "#d9dad7",
+                      "tertiary-fixed-dim": "#f1bc8b",
+                      "on-primary": "#ffffff",
+                      "surface-container-lowest": "#ffffff",
+                      "background": "#f8faf6",
+                      "on-background": "#191c1a",
+                      "on-secondary-container": "#5e625e",
+                      "surface-container-low": "#f3f4f0",
+                      "on-tertiary-fixed-variant": "#633f18",
+                      "primary-fixed": "#c1ecd4",
+                      "surface": "#f8faf6",
+                      "on-tertiary": "#ffffff",
+                      "tertiary-fixed": "#ffdcbe",
+                      "on-secondary-fixed": "#181c1a",
+                      "primary": "#012d1d",
+                      "error-container": "#ffdad6",
+                      "inverse-on-surface": "#f0f1ed",
+                      "tertiary": "#3c1f00",
+                      "accent-ochre": "#cd9d6d",
+                      "on-secondary": "#ffffff",
+                      "on-primary-fixed": "#002114",
+                      "tertiary-container": "#56340e",
+                      "on-surface": "#191c1a",
+                      "secondary": "#5b5f5c",
+                      "surface-bright": "#f8faf6",
+                      "on-primary-fixed-variant": "#274e3d",
+                      "on-error": "#ffffff",
+                      "primary-fixed-dim": "#a5d0b9"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "stack-lg": "24px",
+                      "section-gap-mobile": "48px",
+                      "base": "8px",
+                      "stack-md": "16px",
+                      "gutter-mobile": "16px",
+                      "margin-mobile": "16px",
+                      "stack-sm": "8px"
+              },
+              "fontFamily": {
+                      "headline-xl": ["\"Source Serif 4\""],
+                      "headline-sm": ["\"Source Serif 4\""],
+                      "headline-md": ["\"Source Serif 4\""],
+                      "label-sm": ["Plus Jakarta Sans"],
+                      "body-lg": ["Plus Jakarta Sans"],
+                      "body-md": ["Plus Jakarta Sans"],
+                      "label-md": ["Plus Jakarta Sans"],
+                      "headline-lg": ["\"Source Serif 4\""],
+                      "body-sm": ["Plus Jakarta Sans"]
+              },
+              "fontSize": {
+                      "headline-xl": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-sm": ["20px", {"lineHeight": "26px", "fontWeight": "600"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "label-sm": ["11px", {"lineHeight": "14px", "letterSpacing": "0.03em", "fontWeight": "600"}],
+                      "body-lg": ["17px", {"lineHeight": "26px", "fontWeight": "400"}],
+                      "body-md": ["15px", {"lineHeight": "22px", "fontWeight": "400"}],
+                      "label-md": ["13px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                      "headline-lg": ["30px", {"lineHeight": "38px", "fontWeight": "600"}],
+                      "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}]
+              }
+            },
+          }
+        }
+    </script>
+<style>
+        /* Custom Utilities */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md antialiased pt-16 flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<header class="bg-surface text-primary font-headline-sm text-headline-sm-mobile fixed top-0 w-full z-50 border-b border-outline-variant flat no shadows">
+<div class="flex items-center justify-between px-margin-mobile h-16 w-full max-w-full">
+<button aria-label="Menu" class="active:scale-95 transition-transform duration-150 hover:bg-surface-variant/50 p-2 rounded-full -ml-2" onclick="document.getElementById('nav-drawer').classList.remove('-translate-x-full'); document.getElementById('drawer-overlay').classList.remove('opacity-0', 'pointer-events-none'); document.getElementById('drawer-overlay').classList.add('opacity-100');">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="menu">menu</span>
+</button>
+<h1 class="font-headline-md text-headline-md-mobile text-primary">Krishi Sewa</h1>
+<button aria-label="Cart" class="active:scale-95 transition-transform duration-150 hover:bg-surface-variant/50 p-2 rounded-full -mr-2 relative">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="shopping_cart">shopping_cart</span>
+<span class="absolute top-1 right-1 bg-accent-ochre text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center">3</span>
+</button>
+</div>
+</header>
+<!-- Navigation Drawer -->
+<div class="fixed inset-0 bg-on-background/40 z-[55] opacity-0 pointer-events-none transition-opacity duration-300" id="drawer-overlay" onclick="document.getElementById('nav-drawer').classList.add('-translate-x-full'); this.classList.remove('opacity-100'); this.classList.add('opacity-0', 'pointer-events-none');"></div>
+<nav class="fixed left-0 top-0 h-full w-[280px] rounded-r-xl z-[60] bg-surface border-r border-outline-variant shadow-xl transition-transform duration-300 ease-in-out -translate-x-full font-body-md text-body-md flex flex-col py-stack-lg" id="nav-drawer">
+<div class="px-margin-mobile mb-section-gap-mobile">
+<h2 class="font-headline-lg text-headline-lg-mobile text-primary">Krishi Sewa Foundation</h2>
+</div>
+<div class="flex flex-col gap-2 flex-grow overflow-y-auto">
+<a class="text-on-surface-variant mx-2 px-4 py-3 flex items-center gap-4 hover:bg-surface-container-high transition-colors duration-200 ease-in-out rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+                Home
+            </a>
+<!-- Active Tab -->
+<a class="bg-secondary-container text-on-secondary-container rounded-full mx-2 px-4 py-3 flex items-center gap-4 hover:bg-surface-container-high transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="storefront" style="font-variation-settings: 'FILL' 1;">storefront</span>
+                Shop
+            </a>
+<a class="text-on-surface-variant mx-2 px-4 py-3 flex items-center gap-4 hover:bg-surface-container-high transition-colors duration-200 ease-in-out rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="package_2">package_2</span>
+                My Orders
+            </a>
+<a class="text-on-surface-variant mx-2 px-4 py-3 flex items-center gap-4 hover:bg-surface-container-high transition-colors duration-200 ease-in-out rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="eco">eco</span>
+                Impact
+            </a>
+<a class="text-on-surface-variant mx-2 px-4 py-3 flex items-center gap-4 hover:bg-surface-container-high transition-colors duration-200 ease-in-out rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+                Settings
+            </a>
+</div>
+</nav>
+<!-- Main Canvas -->
+<main class="flex-grow w-full flex flex-col gap-section-gap-mobile pb-section-gap-mobile md:hidden"> <!-- Mobile only layout per rules for this specific request, but ensuring responsive base -->
+<!-- Search & Filter Bar -->
+<section class="px-margin-mobile mt-stack-md flex gap-stack-sm items-center">
+<div class="relative flex-grow">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" data-icon="search">search</span>
+<input class="w-full bg-surface-container text-on-surface font-body-md pl-10 pr-4 py-3 rounded-lg border border-outline-muted focus:border-primary focus:ring-0 outline-none transition-colors" placeholder="Search seeds, tools, fertilizers..." type="text"/>
+</div>
+<button aria-label="Filter options" class="bg-surface-container p-3 rounded-lg border border-outline-muted flex-shrink-0 text-primary flex items-center justify-center active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="tune">tune</span>
+</button>
+</section>
+<!-- Categories (Horizontal Scroll) -->
+<section class="pl-margin-mobile -mt-stack-lg">
+<div class="flex gap-stack-sm overflow-x-auto hide-scrollbar pr-margin-mobile py-2">
+<button class="whitespace-nowrap px-4 py-2 rounded-full bg-primary text-on-primary font-label-md transition-colors border border-primary">All Products</button>
+<button class="whitespace-nowrap px-4 py-2 rounded-full bg-surface text-on-surface-variant font-label-md border border-outline-muted hover:bg-surface-container transition-colors">Seeds &amp; Grains</button>
+<button class="whitespace-nowrap px-4 py-2 rounded-full bg-surface text-on-surface-variant font-label-md border border-outline-muted hover:bg-surface-container transition-colors">Organic Fertilizers</button>
+<button class="whitespace-nowrap px-4 py-2 rounded-full bg-surface text-on-surface-variant font-label-md border border-outline-muted hover:bg-surface-container transition-colors">Farm Tools</button>
+<button class="whitespace-nowrap px-4 py-2 rounded-full bg-surface text-on-surface-variant font-label-md border border-outline-muted hover:bg-surface-container transition-colors">Irrigation</button>
+</div>
+</section>
+<!-- Product Grid -->
+<section class="px-margin-mobile">
+<div class="grid grid-cols-2 gap-gutter-mobile">
+<!-- Product Card 1 -->
+<div class="flex flex-col bg-surface border border-outline-muted rounded-xl overflow-hidden group">
+<div class="relative aspect-square bg-surface-container p-4 flex items-center justify-center">
+<div class="absolute top-2 left-2 bg-accent-ochre text-on-tertiary-fixed font-label-sm px-2 py-1 rounded-full z-10">-15%</div>
+<img class="w-full h-full object-cover rounded-lg group-hover:scale-105 transition-transform duration-300" data-alt="A high-quality editorial photograph of premium organic wheat seeds arranged beautifully on a rustic wooden table. Soft, natural lighting highlights the golden textures of the grain against a subtle, muted background, evoking an organic and reliable agricultural aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB8QdJzzDzZrFObU5GuLusa0HjE6hBMarguiu4jCBiGtz7etipQffJrT1VyuzSGHi9yGSNoEpsiqFJ6rsJPVF5t0QG2-kwb0COopKKE9e8Wx-GBy7Z9Tiy02u6tMTlu2d7Tm7tW_a9eqqqKPjDtcVMgzohdP6jKdTVRpJqDLq8jZMuhpyOX8ab47DEoDesZnlwHcVm7dT0aKkbpCFVdvtfrP9qBEvwh5911j_sesDmDknwnoMM8pVM9UA"/>
+</div>
+<div class="p-3 flex flex-col flex-grow gap-2">
+<h3 class="font-body-sm text-on-surface line-clamp-2">Premium Organic Wheat Seeds (10kg)</h3>
+<div class="mt-auto flex items-end justify-between">
+<div>
+<p class="font-label-sm text-outline line-through">₹ 1,200</p>
+<p class="font-headline-sm text-primary">₹ 1,020</p>
+</div>
+</div>
+<button class="w-full mt-2 bg-primary-container text-on-primary font-label-md py-2 rounded-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[18px]" data-icon="add_shopping_cart">add_shopping_cart</span>
+                            Add
+                        </button>
+</div>
+</div>
+<!-- Product Card 2 -->
+<div class="flex flex-col bg-surface border border-outline-muted rounded-xl overflow-hidden group">
+<div class="relative aspect-square bg-surface-container p-4 flex items-center justify-center">
+<img class="w-full h-full object-cover rounded-lg group-hover:scale-105 transition-transform duration-300" data-alt="A meticulously styled, brightly lit photo of a modern, durable hand trowel resting on rich, dark potting soil. The image uses soft daylight and a clean, earthy color palette, reflecting a trustworthy and high-quality farming tool." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA1fRCqMpoo7n4PxG9NkCILpFPQTe5snJxw1ARxOVXAFC1AETCWOA30MH1mhKOxOFHCwu5ArUdruAFmdVeaSCTTGGkTf_HyjzHW5PCkEb_QEMAL9yeVDJoNZoYDYePD9X90y1eesnTTsOBevFKKrRlw-3Jwom2vYJ-mqyxAbVCRC0_xapxoCK1cwi7zQvyCrpQVC1HGHEe-NhanBZ_LHVJaABPGUmFcxEbz_KsMuYx_DFicpK8YGMUn3A"/>
+</div>
+<div class="p-3 flex flex-col flex-grow gap-2">
+<h3 class="font-body-sm text-on-surface line-clamp-2">Heavy Duty Hand Trowel</h3>
+<div class="mt-auto flex items-end justify-between">
+<div>
+<p class="font-headline-sm text-primary">₹ 450</p>
+</div>
+</div>
+<button class="w-full mt-2 bg-surface text-primary border border-primary font-label-md py-2 rounded-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[18px]" data-icon="add_shopping_cart">add_shopping_cart</span>
+                            Add
+                        </button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container w-full mt-auto border-t border-outline-variant flat no shadows flex flex-col items-center gap-stack-md py-stack-lg px-margin-mobile text-center z-10 md:hidden">
+<h2 class="font-headline-sm text-headline-sm text-primary">Krishi Sewa Foundation</h2>
+<div class="flex gap-4 font-label-md text-label-md text-on-surface-variant flex-wrap justify-center">
+<a class="text-on-surface-variant hover:text-primary transition-colors opacity-90 hover:opacity-100" href="#">Privacy Policy</a>
+<span class="text-outline-muted">•</span>
+<a class="text-on-surface-variant hover:text-primary transition-colors opacity-90 hover:opacity-100" href="#">Terms of Service</a>
+<span class="text-outline-muted">•</span>
+<a class="text-on-surface-variant hover:text-primary transition-colors opacity-90 hover:opacity-100" href="#">Contact Us</a>
+</div>
+<p class="font-label-md text-label-md text-on-surface-variant">© 2024 Krishi Sewa Foundation. Supporting our farmers.</p>
+</footer>
+</body></html>

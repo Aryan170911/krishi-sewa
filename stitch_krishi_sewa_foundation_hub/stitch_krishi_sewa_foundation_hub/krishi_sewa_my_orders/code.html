@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>My Orders - Krishi Sewa</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&amp;family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-low": "#f1f4f0",
+                        "secondary-container": "#e8dfc5",
+                        "on-error": "#ffffff",
+                        "on-tertiary-fixed-variant": "#623f18",
+                        "surface-container-highest": "#e0e3df",
+                        "surface-bright": "#f7faf5",
+                        "on-primary-fixed": "#002114",
+                        "on-secondary-container": "#68634d",
+                        "outline": "#717973",
+                        "secondary-fixed-dim": "#cec6ad",
+                        "on-secondary-fixed-variant": "#4c4733",
+                        "tertiary-fixed": "#ffdcbd",
+                        "on-primary": "#ffffff",
+                        "on-background": "#191c1a",
+                        "tertiary": "#3b1f00",
+                        "on-error-container": "#93000a",
+                        "on-tertiary": "#ffffff",
+                        "inverse-surface": "#2d312e",
+                        "surface-variant": "#e0e3df",
+                        "on-tertiary-fixed": "#2c1600",
+                        "error-container": "#ffdad6",
+                        "inverse-primary": "#a5d0b9",
+                        "outline-variant": "#c1c8c2",
+                        "primary-container": "#1b4332",
+                        "surface": "#f7faf5",
+                        "on-surface": "#191c1a",
+                        "surface-tint": "#3f6653",
+                        "background": "#f7faf5",
+                        "on-tertiary-container": "#cd9d6d",
+                        "tertiary-fixed-dim": "#f0bd8b",
+                        "inverse-on-surface": "#eff2ed",
+                        "error": "#ba1a1a",
+                        "surface-dim": "#d8dbd6",
+                        "on-secondary-fixed": "#1f1c0b",
+                        "primary-fixed-dim": "#a5d0b9",
+                        "surface-container": "#ecefea",
+                        "on-secondary": "#ffffff",
+                        "surface-container-high": "#e6e9e4",
+                        "secondary-fixed": "#ebe2c8",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-container": "#56340e",
+                        "on-primary-fixed-variant": "#274e3d",
+                        "primary": "#012d1d",
+                        "on-primary-container": "#86af99",
+                        "primary-fixed": "#c1ecd4",
+                        "on-surface-variant": "#414844",
+                        "secondary": "#645e49"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-md": "16px",
+                        "gutter": "24px",
+                        "stack-lg": "32px",
+                        "section-gap": "80px",
+                        "margin-desktop": "48px",
+                        "container-max": "1200px",
+                        "margin-mobile": "16px",
+                        "unit": "8px",
+                        "stack-sm": "8px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Plus Jakarta Sans"],
+                        "headline-lg": ["\"Source Serif 4\""],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "label-sm": ["Plus Jakarta Sans"],
+                        "body-sm": ["Plus Jakarta Sans"],
+                        "headline-sm": ["\"Source Serif 4\""],
+                        "headline-md": ["\"Source Serif 4\""],
+                        "headline-lg-mobile": ["\"Source Serif 4\""],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "headline-xl": ["\"Source Serif 4\""]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-lg": ["36px", { "lineHeight": "44px", "fontWeight": "600" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-sm": ["12px", { "lineHeight": "14px", "letterSpacing": "0.03em", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-sm": ["22px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-md": ["28px", { "lineHeight": "36px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["30px", { "lineHeight": "38px", "fontWeight": "600" }],
+                        "label-md": ["14px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-xl": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col md:flex-row">
+<!-- Mobile TopAppBar -->
+<header class="md:hidden bg-surface flex justify-between items-center px-margin-mobile h-16 w-full border-b border-outline-variant z-50 sticky top-0">
+<div class="flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-colors active:opacity-80 p-2 rounded-full">
+<span class="material-symbols-outlined text-primary" data-icon="menu">menu</span>
+</div>
+<div class="font-headline-md text-headline-md font-bold text-primary">
+            Krishi Sewa
+        </div>
+<div class="flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-colors active:opacity-80 p-2 rounded-full">
+<span class="material-symbols-outlined text-primary" data-icon="account_circle">account_circle</span>
+</div>
+</header>
+<!-- Desktop SideNavBar -->
+<nav class="hidden md:flex flex-col h-screen w-80 fixed top-0 left-0 bg-surface-bright shadow-lg z-40 p-6 overflow-y-auto">
+<div class="mb-section-gap">
+<div class="font-headline-sm text-headline-sm text-primary font-bold mb-1">Krishi Sewa</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Heritage Agricultural Foundation</div>
+</div>
+<div class="flex flex-col gap-2 flex-grow">
+<!-- Home: Inactive -->
+<a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 hover:bg-surface-container-high rounded-lg transition-all duration-200 ease-in-out cursor-pointer" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-body-md text-body-md">Home</span>
+</a>
+<!-- Shop: Inactive -->
+<a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 hover:bg-surface-container-high rounded-lg transition-all duration-200 ease-in-out cursor-pointer" href="#">
+<span class="material-symbols-outlined" data-icon="shopping_basket">shopping_basket</span>
+<span class="font-body-md text-body-md">Shop</span>
+</a>
+<!-- My Orders: Active -->
+<a class="flex items-center gap-4 bg-secondary-container text-on-secondary-container rounded-lg px-4 py-3 transition-all duration-200 ease-in-out cursor-pointer" href="#">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+<span class="font-body-md text-body-md font-bold">My Orders</span>
+</a>
+<!-- Impact: Inactive -->
+<a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 hover:bg-surface-container-high rounded-lg transition-all duration-200 ease-in-out cursor-pointer" href="#">
+<span class="material-symbols-outlined" data-icon="eco">eco</span>
+<span class="font-body-md text-body-md">Impact</span>
+</a>
+<!-- Settings: Inactive -->
+<a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 hover:bg-surface-container-high rounded-lg transition-all duration-200 ease-in-out cursor-pointer mt-auto" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-md text-body-md">Settings</span>
+</a>
+</div>
+<button class="mt-8 w-full bg-primary text-on-primary py-3 rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors">
+            Donate Now
+        </button>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-grow md:ml-80 w-full min-h-screen bg-surface-bright">
+<div class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-stack-lg md:py-section-gap">
+<!-- Page Header -->
+<div class="mb-stack-lg border-b border-outline-variant pb-stack-md">
+<h1 class="font-headline-xl text-headline-xl text-primary mb-2 hidden md:block">My Orders</h1>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-primary mb-2 md:hidden">My Orders</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Review your past purchases and track ongoing deliveries.</p>
+</div>
+<!-- Orders List -->
+<div class="flex flex-col gap-stack-lg">
+<!-- Order Card 1: In Transit -->
+<article class="bg-surface-container-lowest border border-secondary-fixed-dim rounded-xl p-gutter hover:border-secondary transition-colors duration-300">
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-stack-md gap-4">
+<div>
+<div class="flex items-center gap-3 mb-1">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Order #KS-8301</h2>
+<span class="bg-tertiary-container text-on-tertiary-container font-label-sm text-label-sm px-3 py-1 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="local_shipping">local_shipping</span>
+                                    In Transit
+                                </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Placed on October 20, 2024</p>
+</div>
+<div class="text-left md:text-right">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1">Total Amount</p>
+<p class="font-headline-md text-headline-md text-primary">₹3,200</p>
+</div>
+</div>
+<div class="border-t border-b border-surface-container-high py-stack-md mb-stack-md flex gap-gutter overflow-x-auto">
+<div class="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border border-surface-container-high relative">
+<img class="object-cover w-full h-full absolute inset-0" data-alt="A high-quality, editorial style photograph of a burlap sack filled with premium quality wheat seeds resting on a rustic wooden table in soft, warm morning light. The color palette emphasizes earthy ochres, soft creams, and muted greens, reflecting an organic and established agricultural heritage. The composition is clean and focused, highlighting the texture of the seeds and the burlap." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBefD0J444ryWCFfie0k20tlPZD0PD9u4VcABNOijqvfagSYN3HZnJwYcLYk5GtSmlbIoe4-I0aDDDANHF836q9YKNeg-Cfh4S0KKrY0Mt8MwNLCRdmzaZspn7ujjS71kCbWeSfQ0PWmbG5j5DwqXKmPfuekgQJi8_4STuqpP4rEbDeso67RyBBdxTJCqhbVGjq1BU9Oh0Gn87Uh_Uvk_sa2UwbKRv4_T2cwejmshRmN7dzb4fKGtlpiA"/>
+</div>
+<div class="flex flex-col justify-center">
+<p class="font-label-md text-label-md text-on-surface mb-1">High-Yield Wheat Seeds (Variety HD-3086)</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Qty: 5 Bags (50kg total)</p>
+</div>
+</div>
+<div class="flex flex-col sm:flex-row justify-end items-center gap-4">
+<button class="w-full sm:w-auto font-label-md text-label-md text-primary hover:text-primary-container transition-colors px-4 py-2 border-b border-transparent hover:border-primary-container">
+                            View Invoice
+                        </button>
+<button class="w-full sm:w-auto bg-primary text-on-primary font-label-md text-label-md px-6 py-3 rounded-lg hover:bg-primary-container transition-colors flex items-center justify-center gap-2">
+                            Track Order
+                            <span class="material-symbols-outlined text-[20px]" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</article>
+<!-- Order Card 2: Delivered -->
+<article class="bg-surface-container-lowest border border-secondary-fixed-dim rounded-xl p-gutter hover:border-secondary transition-colors duration-300">
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-stack-md gap-4">
+<div>
+<div class="flex items-center gap-3 mb-1">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Order #KS-8294</h2>
+<span class="bg-surface-container-high text-on-surface font-label-sm text-label-sm px-3 py-1 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="check_circle">check_circle</span>
+                                    Delivered
+                                </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Delivered on October 15, 2024</p>
+</div>
+<div class="text-left md:text-right">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1">Total Amount</p>
+<p class="font-headline-md text-headline-md text-primary">₹1,700</p>
+</div>
+</div>
+<div class="border-t border-b border-surface-container-high py-stack-md mb-stack-md flex flex-col gap-4">
+<div class="flex gap-gutter items-center">
+<div class="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-surface-container-high relative">
+<img class="object-cover w-full h-full absolute inset-0" data-alt="A clean, editorial product shot of a minimalist bottle of organic Neem oil. The bottle is amber glass with a natural textured paper label, sitting on a smooth cream-colored stone surface. Soft, diffused lighting emphasizes the purity and organic nature of the product, with a subtle hint of green leaves blurred in the background. The aesthetic is premium, natural, and trustworthy." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOkZw6ucqWfQ8ea8ctXGcKlh9HfR6mjv7UTlVc7_Xd0HbHEWfrRONvCxAWBYcR5Q-wBrJNxXhQLWEPxNbwQ_oEbCwIfia2Rlu8hZLnQWn18vCRKWqJo6ljOpChgrJNn8Hpjd0fNma2r_7xalagKz1KQbqZn_CaodbqUmSZNRmyM4OR8_cmqCs3qVuCeUINCEyxDPnhhAfCD6DO1Ma_Oba2b2_1EagmgHZV9wxkRBeuuHWO6MtOS2R-TA"/>
+</div>
+<div class="flex-grow">
+<p class="font-label-md text-label-md text-on-surface">Cold-Pressed Organic Neem Oil</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Qty: 1 Ltr</p>
+</div>
+</div>
+<div class="flex gap-gutter items-center">
+<div class="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-surface-container-high relative">
+<img class="object-cover w-full h-full absolute inset-0" data-alt="A beautifully composed flat lay image showing rich, dark organic compost spilling slightly from a small, woven natural fiber basket onto a textured, cream-colored surface. A small, vintage copper hand trowel rests nearby. The lighting is soft and natural, creating a grounded, earthy atmosphere that speaks to soil health and heritage farming practices." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGHzvfnGgmhgztv9jwRKoCUnvjEk5SQkDtpL3VO9VY6k_jwskhtIBvekSh-mFuanYMu3lJxy91O5EEd_x1NkA1uhUvHkgQQ8nDYBj4Q-WrLT5ECwLiUSgJQ3syisLO331L7n8d0t5SDXsu3Ei8ZjcZhD8WfD41muPNnDTuTPPflpVzpMR8VonznYsUrhJhsmz80LKAE9eCg_9RIABhAso4miNTFx1-Z0p-WOtowK4niNhdD7tfL_dlCQ"/>
+</div>
+<div class="flex-grow">
+<p class="font-label-md text-label-md text-on-surface">Premium Vermicompost Fertilizer</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Qty: 2 Bags (10kg each)</p>
+</div>
+</div>
+</div>
+<div class="flex flex-col sm:flex-row justify-end items-center gap-4">
+<button class="w-full sm:w-auto font-label-md text-label-md text-primary hover:text-primary-container transition-colors px-4 py-2 border-b border-transparent hover:border-primary-container">
+                            View Invoice
+                        </button>
+<button class="w-full sm:w-auto border border-primary text-primary font-label-md text-label-md px-6 py-3 rounded-lg hover:bg-surface-container transition-colors">
+                            Reorder Items
+                        </button>
+</div>
+</article>
+</div>
+</div>
+</main>
+</body></html>

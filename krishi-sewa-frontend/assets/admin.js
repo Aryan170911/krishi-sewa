@@ -656,6 +656,17 @@ async function openUserContext(email) {
                 </div>
               `).join("")}
             </div>
+            <div class="border-t border-outline-variant pt-3 space-y-2">
+              <p class="text-xs font-semibold text-on-surface-variant uppercase tracking-wide">Admin Actions</p>
+              <div class="grid grid-cols-2 gap-2">
+                <button onclick="adminChangeEmailPrompt('${escapeHtml(email).replace(/'/g, "&#39;")}')" class="text-sm border border-outline-variant px-3 py-2 rounded-lg hover:border-primary flex items-center justify-center gap-1">
+                  <span class="material-symbols-outlined text-[16px]">mark_email_read</span> Change Email
+                </button>
+                <button onclick="adminResetPasswordPrompt('${escapeHtml(email).replace(/'/g, "&#39;")}')" class="text-sm border border-outline-variant px-3 py-2 rounded-lg hover:border-error flex items-center justify-center gap-1">
+                  <span class="material-symbols-outlined text-[16px]">lock_reset</span> Reset Password
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -667,6 +678,45 @@ async function openUserContext(email) {
   } catch (e) {
     toast("Failed to load user context: " + e.message);
   }
+}
+
+async function adminChangeEmailPrompt(oldEmail) {
+  const newEmail = prompt(`Change email for ${oldEmail}\n\nNew email:`, oldEmail);
+  if (!newEmail || newEmail === oldEmail) return;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+    toast("Invalid email format");
+    return;
+  }
+  if (!confirm(`Change email from ${oldEmail} to ${newEmail}?`)) return;
+  try {
+    const r = await fetch(`${API}/admin/support/user/${encodeURIComponent(oldEmail)}/change-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHeaders() },
+      credentials: "include",
+      body: JSON.stringify({ newEmail: newEmail.toLowerCase() })
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || "Failed");
+    toast("Email changed to " + newEmail);
+    closeUserContext();
+  } catch (e) { toast("Error: " + e.message); }
+}
+
+async function adminResetPasswordPrompt(email) {
+  const newPw = prompt(`Reset password for ${email}\n\nNew password (min 8 chars):`, "");
+  if (!newPw || newPw.length < 8) { toast("Password too short"); return; }
+  if (!confirm(`Reset password for ${email}? They will be logged out.`)) return;
+  try {
+    const r = await fetch(`${API}/admin/support/user/${encodeURIComponent(email)}/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHeaders() },
+      credentials: "include",
+      body: JSON.stringify({ newPassword: newPw })
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || "Failed");
+    toast("Password reset. User will need to log in again.");
+  } catch (e) { toast("Error: " + e.message); }
 }
 
 function closeUserContext() {

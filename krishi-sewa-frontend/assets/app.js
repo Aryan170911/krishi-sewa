@@ -2985,7 +2985,8 @@ function openSearchDialog() {
     <div class="w-full max-w-2xl bg-surface rounded-2xl shadow-2xl border border-outline-variant overflow-hidden" onclick="event.stopPropagation()">
       <form onsubmit="event.preventDefault(); state.searchQuery=this.q.value.trim(); navigateTo('search'); closeSearchDialog();" class="flex items-center gap-3 p-4 border-b border-outline-variant">
         <span class="material-symbols-outlined text-on-surface-variant" aria-hidden="true">search</span>
-        <input name="q" type="search" placeholder="Search seeds, fertilizers, tools..." autofocus class="flex-1 bg-transparent outline-none text-lg" autocomplete="off">
+        <input name="q" type="search" placeholder="Search seeds, fertilizers, tools... (Ctrl+K)" autofocus class="flex-1 bg-transparent outline-none text-lg" autocomplete="off">
+        <kbd class="hidden sm:inline-block text-[10px] bg-surface-container px-1.5 py-0.5 rounded border border-outline-variant text-on-surface-variant font-mono">Esc</kbd>
         <button type="button" onclick="closeSearchDialog()" class="text-on-surface-variant hover:text-on-surface p-1" aria-label="Close search">
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -3012,7 +3013,16 @@ function closeSearchDialog() {
   document.removeEventListener("keydown", searchEscHandler);
 }
 
-function searchEscHandler(e) { if (e.key === "Escape") closeSearchDialog(); }
+function searchEscHandler(e) {
+  if (e.key === "Escape") closeSearchDialog();
+  // Cmd/Ctrl+K to open search
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    openSearchDialog();
+  }
+}
+// Hook up the keyboard shortcut globally
+document.addEventListener("keydown", searchEscHandler);
 
 function renderProfilePage() {
   const user = state.authUser;

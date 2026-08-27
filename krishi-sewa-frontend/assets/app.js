@@ -725,6 +725,26 @@ function handleNewsletter(form) {
   }
 }
 
+async function requestEmailVerification() {
+  if (!state.authUser) return;
+  try {
+    const r = await apiPost("/auth/email-verify/request", {}, true);
+    if (r && r.token) {
+      // Dev mode: show the token so user can verify immediately
+      const code = prompt("Verification code (check your email or copy from dev):", r.token);
+      if (code) {
+        await apiPost("/auth/email-verify/confirm", { token: code }, true);
+        toast("Email verified!");
+        renderApp();
+      }
+    } else {
+      toast("Verification code sent to your email");
+    }
+  } catch (e) {
+    toast("Failed: " + e.message);
+  }
+}
+
 // ============================================
 // SKELETON LOADERS — shown while data loads
 // ============================================
@@ -2953,6 +2973,16 @@ function renderProfilePage() {
   };
   return `
     <main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-section-gap-mobile md:py-section-gap pb-24 md:pb-0">
+      ${user.email_verified === false ? `
+        <div class="mb-4 bg-accent-ochre/20 border-2 border-accent-ochre rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <span class="material-symbols-outlined text-accent-ochre text-3xl shrink-0">mark_email_unread</span>
+          <div class="flex-1">
+            <p class="font-bold text-on-surface">Verify your email</p>
+            <p class="text-sm text-on-surface-variant">Verify ${escapeHtml(user.email)} to unlock order tracking and faster checkout.</p>
+          </div>
+          <button onclick="requestEmailVerification()" class="bg-accent-ochre text-on-tertiary-fixed px-4 py-2 rounded-lg font-semibold text-sm shrink-0 hover:opacity-90">Send code</button>
+        </div>
+      ` : ""}
       <div class="bg-gradient-to-br from-primary to-primary-container rounded-2xl p-6 md:p-8 text-surface-bright mb-6 flex flex-col md:flex-row items-start md:items-center gap-4">
         <div class="h-20 w-20 rounded-full bg-surface text-primary flex items-center justify-center text-3xl font-bold border-4 border-surface/30 shrink-0">${(user.name || user.email || "U")[0].toUpperCase()}</div>
         <div class="flex-1 min-w-0">

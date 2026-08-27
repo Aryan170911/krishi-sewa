@@ -1,9 +1,9 @@
--- Krishi Sewa — Supabase (Postgres) Schema
--- Run in Supabase Dashboard → SQL Editor → Paste → Run
--- Then set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in .env / Render env
+-- Krishi Sewa - Supabase (Postgres) Schema
+-- Run in Supabase Dashboard -> SQL Editor -> New query -> Paste -> Run
+-- Then set SUPABASE_SECRET_KEY (service_role) and SUPABASE_PUBLISHABLE_KEY in env
 
 -- ============================================
--- USERS (auth) — stores email, name, scrypt password hash
+-- USERS (auth) - stores email, name, scrypt password hash
 -- ============================================
 CREATE TABLE IF NOT EXISTS users (
   email TEXT PRIMARY KEY,
@@ -37,9 +37,9 @@ CREATE TABLE IF NOT EXISTS products (
 -- ORDERS (linked to user by email)
 -- ============================================
 CREATE TABLE IF NOT EXISTS orders (
-  id TEXT PRIMARY KEY, -- #KS-XXXXXX
+  id TEXT PRIMARY KEY,
   date TIMESTAMPTZ DEFAULT NOW(),
-  email TEXT,                          -- FK to users.email (nullable for guest orders)
+  email TEXT,
   user_name TEXT,
   items JSONB NOT NULL,
   subtotal NUMERIC,
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 -- ============================================
--- RLS — service_role bypasses; anon gets nothing
+-- RLS - service_role bypasses; anon gets nothing
 -- ============================================
 ALTER TABLE users     DISABLE ROW LEVEL SECURITY;
 ALTER TABLE products  DISABLE ROW LEVEL SECURITY;
@@ -74,6 +74,5 @@ ALTER TABLE orders    DISABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_log DISABLE ROW LEVEL SECURITY;
 
 -- ============================================
--- SEED products — backend auto-seeds if table empty on first GET
--- (no manual inserts needed)
+-- SEED products: backend auto-seeds if table empty on first GET
 -- ============================================

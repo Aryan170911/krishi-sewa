@@ -1,0 +1,38 @@
+[
+  {
+    "timestamp": "2026-08-27T02:36:16.251Z",
+    "action": "order:create",
+    "details": {
+      "id": "#KS-7H0BHV",
+      "email": "aryankumar.170911@gmail.com",
+      "total": 410,
+      "source": "supabase"
+    },
+    "ip": "::1",
+    "user": "admin"
+  },
+  {
+    "timestamp": "2026-08-27T02:37:12.566Z",
+    "action": "order:create",
+    "details": {
+      "id": "#KS-VOTE74",
+      "email": "aryankumar.170911@gmail.com",
+      "total": 1560,
+      "source": "supabase"
+    },
+    "ip": "::1",
+    "user": "admin"
+  },
+  {
+    "timestamp": "2026-08-27T02:44:17.420Z",
+    "action": "order:create",
+    "details": {
+      "id": "#KS-T9XAJD",
+      "email": "aryankumar.170911@gmail.com",
+      "total": 510,
+      "source": "supabase"
+    },
+    "ip": "::1",
+    "user": "admin"
+  }
+]

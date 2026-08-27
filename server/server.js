@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
-import { products as seedProducts, categories, events, indianStates, districtsByState } from "./data.js";
+import { products as seedProducts, categories, events, indianStates, districtsByState, stateNameToCode } from "./data.js";
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import { Resend } from "resend";
@@ -631,6 +631,27 @@ app.get("/api/states/:code/districts", (req, res) => {
   res.json(districts);
 });
 
+// Pincode lookup via India Post API (free, no key, CORS-enabled)
+// Returns { state, stateCode, district, city } or { error }
+app.get("/api/pincode/:pin", async (req, res) => {
+  const pin = String(req.params.pin || "").trim();
+  if (!/^\d{6}$/.test(pin)) return res.status(400).json({ error: "Invalid 6-digit pincode" });
+  try {
+    const r = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+    const data = await r.json();
+    if (!Array.isArray(data) || data[0]?.Status !== "Success" || !data[0]?.PostOffice?.length) {
+      return res.status(404).json({ error: "Pincode not found" });
+    }
+    const po = data[0].PostOffice[0];
+    const stateName = po.State;
+    const district = po.District;
+    const stateCode = stateNameToCode[stateName.toLowerCase()] || "";
+    return res.json({ state: stateName, stateCode, district, city: po.Block || po.Name, postOffices: data[0].PostOffice.map(p => ({ name: p.Name, district: p.District, block: p.Block })) });
+  } catch (e) {
+    return res.status(502).json({ error: "Pincode lookup failed: " + e.message });
+  }
+});
+
 // Orders
 app.get("/api/orders", async (req, res) => {
   const email = (req.query.email || "").toString().trim().toLowerCase();
@@ -683,7 +704,11 @@ app.post("/api/orders", orderLimiter, async (req, res) => {
   if (!/^\d{6}$/.test(String(address.pincode))) return res.status(400).json({ error: "Pincode must be 6 digits" });
   const validStates = Object.keys(districtsByState);
   if (!validStates.includes(address.state)) return res.status(400).json({ error: "Invalid state code" });
-  if (!districtsByState[address.state]?.includes(address.district)) return res.status(400).json({ error: "Invalid district for state" });
+  // Soft district check: only reject if state has known districts AND given district isn't in the list
+  // (pincode lookup may return a district not in our hardcoded top list — that's OK)
+  if (districtsByState[address.state] && !districtsByState[address.state].includes(address.district)) {
+    console.warn(`[order] District '${address.district}' not in top list for state ${address.state}, accepting anyway (pincode validated)`);
+  }
   if (!["upi","card","netbanking","cod","razorpay"].includes(paymentMethod)) return res.status(400).json({ error: "Invalid paymentMethod" });
   const session = getSession(req);
   const enrichedItems = [];

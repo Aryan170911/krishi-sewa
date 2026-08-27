@@ -305,31 +305,8 @@ const mockEvents = [
   }
 ];
 
-const indianStates = [
-  { code: "UP", name: "Uttar Pradesh" },
-  { code: "MH", name: "Maharashtra" },
-  { code: "KA", name: "Karnataka" },
-  { code: "PB", name: "Punjab" },
-  { code: "TN", name: "Tamil Nadu" },
-  { code: "GJ", name: "Gujarat" },
-  { code: "WB", name: "West Bengal" },
-  { code: "RJ", name: "Rajasthan" },
-  { code: "MP", name: "Madhya Pradesh" },
-  { code: "HR", name: "Haryana" }
-];
-
-const districtsByState = {
-  "UP": ["Lucknow", "Kanpur", "Varanasi", "Agra", "Meerut", "Prayagraj", "Bareilly", "Aligarh", "Moradabad", "Saharanpur"],
-  "MH": ["Mumbai", "Pune", "Nagpur", "Nashik", "Aurangabad", "Solapur", "Amravati", "Kolhapur", "Sangli", "Satara"],
-  "KA": ["Bengaluru", "Mysuru", "Hubli-Dharwad", "Mangaluru", "Belagavi", "Kalaburagi", "Davanagere", "Ballari", "Vijayapura", "Shivamogga"],
-  "PB": ["Ludhiana", "Amritsar", "Jalandhar", "Patiala", "Bathinda", "Mohali", "Firozpur", "Batala", "Pathankot", "Moga"],
-  "TN": ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli", "Salem", "Tirunelveli", "Tiruppur", "Vellore", "Erode", "Thoothukudi"],
-  "GJ": ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Bhavnagar", "Jamnagar", "Junagadh", "Gandhinagar", "Anand", "Navsari"],
-  "WB": ["Kolkata", "Howrah", "Durgapur", "Asansol", "Siliguri", "Malda", "Bardhaman", "Berhampore", "Kharagpur", "Haldia"],
-  "RJ": ["Jaipur", "Jodhpur", "Kota", "Bikaner", "Udaipur", "Ajmer", "Bhilwara", "Alwar", "Bharatpur", "Sikar"],
-  "MP": ["Indore", "Bhopal", "Jabalpur", "Gwalior", "Ujjain", "Sagar", "Dewas", "Satna", "Ratlam", "Rewa"],
-  "HR": ["Gurugram", "Faridabad", "Panipat", "Ambala", "Yamunanagar", "Rohtak", "Hisar", "Karnal", "Sonipat", "Panchkula"]
-};
+const indianStates = []; // loaded from /api/states on init
+const districtsByState = {}; // loaded from /api/states/:code/districts on demand
 
 // ============================================
 // BACKEND-SYNCED DATA (populated from API)
@@ -341,11 +318,12 @@ let apiAvailable = false;
 
 async function syncFromBackend() {
   const ordersPath = state.authUser?.email ? `/orders?email=${encodeURIComponent(state.authUser.email)}` : "/orders";
-  const [productsData, categoriesData, eventsData, ordersData] = await Promise.all([
+  const [productsData, categoriesData, eventsData, ordersData, statesData] = await Promise.all([
     apiGet("/products"),
     apiGet("/categories"),
     apiGet("/events"),
-    apiGet(ordersPath)
+    apiGet(ordersPath),
+    apiGet("/states")
   ]);
   if (productsData) {
     activeProducts = productsData;
@@ -362,6 +340,10 @@ async function syncFromBackend() {
         state.lastOrder = ordersData[ordersData.length - 1];
       }
     }
+  }
+  if (Array.isArray(statesData) && statesData.length) {
+    indianStates.length = 0;
+    indianStates.push(...statesData);
   }
   if (apiAvailable) {
     console.log(`✅ Backend connected: ${activeProducts.length} products loaded from API`);
@@ -545,11 +527,11 @@ function renderNav() {
             ${cartCount > 0 ? `<span class="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-accent-ochre text-[10px] font-bold text-on-tertiary-fixed border border-surface">${cartCount > 99 ? "99+" : cartCount}</span>` : ""}
           </button>
           ${authUser ? `
-            <div class="hidden md:flex items-center gap-2 bg-secondary-container rounded-full pl-2 pr-3 py-1 border border-outline-variant">
-              <div class="h-7 w-7 rounded-full bg-primary text-on-primary flex items-center justify-center text-xs font-bold">${(authUser.email || "U")[0].toUpperCase()}</div>
-              <span class="text-xs font-semibold text-on-secondary-container max-w-[120px] truncate">${(authUser.email || "User")}</span>
-              <button onclick="handleLogout()" title="Logout" class="text-on-surface-variant hover:text-error"><span class="material-symbols-outlined text-lg">logout</span></button>
-            </div>
+            <button onclick="navigateTo('profile')" class="hidden md:flex items-center gap-2 bg-secondary-container rounded-full pl-2 pr-3 py-1 border border-outline-variant hover:border-primary transition-colors">
+              <div class="h-7 w-7 rounded-full bg-primary text-on-primary flex items-center justify-center text-xs font-bold">${(authUser.name || authUser.email || "U")[0].toUpperCase()}</div>
+              <span class="text-xs font-semibold text-on-secondary-container max-w-[120px] truncate">${(authUser.name || authUser.email || "User")}</span>
+              <span class="material-symbols-outlined text-on-surface-variant text-base">expand_more</span>
+            </button>
           ` : `
             <button class="hidden md:flex items-center gap-1 bg-primary text-on-primary font-label-md text-label-md px-4 py-2 rounded-lg hover:opacity-90 transition-opacity" onclick="navigateTo('auth')">
               <span class="material-symbols-outlined text-lg">login</span> Login
@@ -576,7 +558,7 @@ function renderMobileDrawer() {
     { page: "about", icon: "groups", label: "About Us" }
   ];
   if (state.authUser) {
-    drawerLinks.push({ page: "auth", icon: "verified_user", label: (state.authUser.name || "Account") });
+    drawerLinks.push({ page: "profile", icon: "account_circle", label: state.authUser.name || "My Profile" });
   } else {
     drawerLinks.push({ page: "auth", icon: "login", label: "Login / Sign Up" });
   }
@@ -621,7 +603,7 @@ function renderMobileBottomNav() {
     { page: "orders", icon: "package_2", label: "Orders" }
   ];
 
-  const hideOnPages = ["checkout", "confirmation", "auth", "coming-soon"];
+  const hideOnPages = ["checkout", "confirmation", "auth", "coming-soon", "profile"];
   if (hideOnPages.includes(state.currentPage)) return "";
 
   return `
@@ -1375,8 +1357,8 @@ function renderCheckoutPage() {
                 </div>
               </div>
               <div class="md:col-span-2">
-                <label class="block text-label-md font-label-md text-on-surface-variant mb-unit" for="pincode">Pincode</label>
-                <input class="w-full bg-surface-container-low border-b border-outline-variant focus:border-primary focus:ring-0 px-4 py-3 text-body-md text-on-surface rounded-t-DEFAULT outline-none transition-colors" id="pincode" placeholder="6-digit code" type="text" maxlength="6" pattern="[0-9]{6}" value="${state.billingAddress.pincode || ''}" required>
+                <label class="block text-label-md font-label-md text-on-surface-variant mb-unit" for="pincode">Pincode <span class="text-on-surface-variant/60 text-xs font-normal" id="pincodeHint">— auto-fills state &amp; district</span></label>
+                <input class="w-full bg-surface-container-low border-b border-outline-variant focus:border-primary focus:ring-0 px-4 py-3 text-body-md text-on-surface rounded-t-DEFAULT outline-none transition-colors" id="pincode" placeholder="6-digit code" type="text" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" value="${state.billingAddress.pincode || ''}" required oninput="onPincodeChange(this.value)">
               </div>
             </form>
             <button class="mt-6 w-full md:w-auto bg-primary text-on-primary px-8 py-3 rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors flex items-center justify-center gap-2" onclick="proceedToPayment()">
@@ -1832,8 +1814,9 @@ function renderAuthPage() {
         <span class="material-symbols-outlined text-primary text-5xl">verified_user</span>
         <h1 class="text-2xl font-bold text-primary mt-3">Welcome, ${user.name || user.email}</h1>
         <p class="text-on-surface-variant mt-2">You're signed in securely. Your orders will be linked to <b>${user.email}</b>.</p>
-        <button onclick="handleLogout()" class="mt-6 w-full bg-primary text-on-primary py-3 rounded-lg font-semibold">Logout</button>
+        <button onclick="navigateTo('profile')" class="mt-6 w-full bg-primary text-on-primary py-3 rounded-lg font-semibold flex items-center justify-center gap-2"><span class="material-symbols-outlined">person</span> View My Profile</button>
         <button onclick="navigateTo('shop')" class="mt-3 w-full border border-outline-variant py-3 rounded-lg font-semibold">Continue Shopping</button>
+        <button onclick="handleLogout()" class="mt-3 w-full text-sm text-on-surface-variant hover:text-error">Logout</button>
       </div>
     </main>`;
   }
@@ -2151,6 +2134,10 @@ function handleHashChange() {
       state.currentPage = 'auth';
       renderApp();
       break;
+    case 'profile':
+      state.currentPage = 'profile';
+      renderApp();
+      break;
     case 'coming-soon':
       state.currentPage = 'coming-soon';
       renderApp();
@@ -2285,19 +2272,76 @@ function clearFilters() {
   }
 }
 
-function updateDistricts(stateCode) {
+async function updateDistricts(stateCode) {
   const districtSelect = document.getElementById('districtSelect');
-  if (districtSelect) {
-    if (stateCode && districtsByState[stateCode]) {
-      districtSelect.disabled = false;
-      districtSelect.innerHTML = '<option value="" selected disabled>Select District</option>' +
-        districtsByState[stateCode].map(d => `<option value="${d}">${d}</option>`).join('');
-    } else {
-      districtSelect.disabled = true;
-      districtSelect.innerHTML = '<option value="" selected disabled>Select District</option>';
-    }
-  }
+  if (!districtSelect) return;
   state.billingAddress.state = stateCode;
+  if (!stateCode) {
+    districtSelect.disabled = true;
+    districtSelect.innerHTML = '<option value="" selected disabled>Select District</option>';
+    return;
+  }
+  // Use cached list if we have it
+  if (districtsByState[stateCode] && districtsByState[stateCode].length) {
+    districtSelect.disabled = false;
+    districtSelect.innerHTML = '<option value="" selected disabled>Select District</option>' +
+      districtsByState[stateCode].map(d => `<option value="${d}">${d}</option>`).join('');
+    return;
+  }
+  // Fetch from backend
+  districtSelect.disabled = true;
+  districtSelect.innerHTML = '<option value="" selected disabled>Loading…</option>';
+  try {
+    const list = await apiGet(`/states/${encodeURIComponent(stateCode)}/districts`);
+    districtsByState[stateCode] = list || [];
+    districtSelect.disabled = false;
+    districtSelect.innerHTML = '<option value="" selected disabled>Select District</option>' +
+      (list || []).map(d => `<option value="${d}">${d}</option>`).join('');
+  } catch (e) {
+    districtSelect.innerHTML = '<option value="" selected disabled>Could not load districts</option>';
+  }
+}
+
+// Auto-fill state and district from pincode via /api/pincode/:pin
+let _pincodeTimer = null;
+async function onPincodeChange(value) {
+  const pin = String(value || "").replace(/\D/g, "").slice(0, 6);
+  const hint = document.getElementById("pincodeHint");
+  if (hint) hint.textContent = pin.length === 6 ? "— looking up..." : "— auto-fills state & district";
+  if (pin.length !== 6) return;
+  clearTimeout(_pincodeTimer);
+  _pincodeTimer = setTimeout(async () => {
+    try {
+      const data = await apiGet(`/pincode/${pin}`);
+      if (!data || data.error) { if (hint) hint.textContent = "— pincode not found"; return; }
+      // Set state
+      if (data.stateCode) {
+        const sel = document.getElementById("stateSelect");
+        if (sel) {
+          sel.value = data.stateCode;
+          state.billingAddress.state = data.stateCode;
+          await updateDistricts(data.stateCode);
+          // Now set district (might not be in our list, that's OK — we set raw value)
+          const dsel = document.getElementById("districtSelect");
+          if (dsel) {
+            // Add the option if not in the list
+            if (![...dsel.options].some(o => o.value === data.district)) {
+              const opt = document.createElement("option");
+              opt.value = data.district; opt.textContent = data.district + " (from pincode)"; opt.selected = true;
+              dsel.insertBefore(opt, dsel.firstChild);
+            } else {
+              dsel.value = data.district;
+            }
+            state.billingAddress.district = data.district;
+          }
+        }
+        if (hint) hint.innerHTML = `<span class="text-primary font-semibold">✓ ${data.district}, ${data.state}</span>`;
+        toast("Auto-filled: " + data.district + ", " + data.state);
+      }
+    } catch (e) {
+      if (hint) hint.textContent = "— lookup failed, pick manually";
+    }
+  }, 400);
 }
 
 function proceedToPayment() {
@@ -2466,6 +2510,108 @@ function render404Page() {
   `;
 }
 
+function renderProfilePage() {
+  const user = state.authUser;
+  if (!user) {
+    return `
+      <main class="flex-grow w-full max-w-md mx-auto px-4 py-16 text-center">
+        <span class="material-symbols-outlined text-outline text-7xl mb-4">account_circle</span>
+        <h1 class="text-2xl font-bold text-primary mb-2">Sign in to view your profile</h1>
+        <p class="text-on-surface-variant mb-6">Track orders, see stats, and manage your account.</p>
+        <button onclick="navigateTo('auth')" class="bg-primary text-on-primary px-6 py-3 rounded-lg font-semibold">Login / Sign Up</button>
+      </main>`;
+  }
+  const orders = state.orders || [];
+  const totalOrders = orders.length;
+  const totalSpent = orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+  const memberSince = (() => {
+    try {
+      const oldest = orders.length ? orders.map(o => new Date(o.date || o.created_at)).sort((a, b) => a - b)[0] : new Date();
+      return oldest.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+    } catch { return "Today"; }
+  })();
+  const statusBadge = (s) => {
+    const colors = { processing: "bg-yellow-100 text-yellow-800", shipped: "bg-blue-100 text-blue-800", delivered: "bg-green-100 text-green-800", cancelled: "bg-red-100 text-red-800" };
+    return `<span class="px-2 py-0.5 rounded-full text-xs font-bold ${colors[s] || colors.processing}">${(s || "processing").toUpperCase()}</span>`;
+  };
+  return `
+    <main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-section-gap-mobile md:py-section-gap pb-24 md:pb-0">
+      <div class="bg-gradient-to-br from-primary to-primary-container rounded-2xl p-6 md:p-8 text-surface-bright mb-6 flex flex-col md:flex-row items-start md:items-center gap-4">
+        <div class="h-20 w-20 rounded-full bg-surface text-primary flex items-center justify-center text-3xl font-bold border-4 border-surface/30 shrink-0">${(user.name || user.email || "U")[0].toUpperCase()}</div>
+        <div class="flex-1 min-w-0">
+          <h1 class="text-2xl md:text-3xl font-bold">${user.name || "User"}</h1>
+          <p class="text-surface/80 text-sm md:text-base truncate">${user.email}</p>
+          <p class="text-surface/70 text-xs mt-1">Member since ${memberSince}</p>
+        </div>
+        <div class="flex gap-2 w-full md:w-auto">
+          <button onclick="navigateTo('shop')" class="flex-1 md:flex-none bg-surface text-primary px-4 py-2 rounded-lg font-semibold text-sm">Shop</button>
+          <button onclick="handleLogout(); navigateTo('home')" class="flex-1 md:flex-none bg-surface/20 text-surface border border-surface/30 px-4 py-2 rounded-lg font-semibold text-sm">Logout</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 text-center">
+          <span class="material-symbols-outlined text-primary text-3xl">package_2</span>
+          <p class="text-2xl font-bold text-primary mt-1">${totalOrders}</p>
+          <p class="text-xs text-on-surface-variant">Total Orders</p>
+        </div>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 text-center">
+          <span class="material-symbols-outlined text-primary text-3xl">payments</span>
+          <p class="text-2xl font-bold text-primary mt-1">${"₹" + totalSpent.toLocaleString("en-IN")}</p>
+          <p class="text-xs text-on-surface-variant">Total Spent</p>
+        </div>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 text-center">
+          <span class="material-symbols-outlined text-primary text-3xl">check_circle</span>
+          <p class="text-2xl font-bold text-primary mt-1">${orders.filter(o => o.status === "delivered").length}</p>
+          <p class="text-xs text-on-surface-variant">Delivered</p>
+        </div>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 text-center">
+          <span class="material-symbols-outlined text-primary text-3xl">local_shipping</span>
+          <p class="text-2xl font-bold text-primary mt-1">${orders.filter(o => o.status === "shipped" || o.status === "processing").length}</p>
+          <p class="text-xs text-on-surface-variant">In Transit</p>
+        </div>
+      </div>
+
+      <section>
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg md:text-xl font-bold text-primary">Your Orders</h2>
+          <button onclick="navigateTo('orders')" class="text-sm text-primary hover:underline font-semibold">View all →</button>
+        </div>
+        ${orders.length === 0 ? `
+          <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-8 text-center">
+            <span class="material-symbols-outlined text-outline text-5xl">shopping_bag</span>
+            <p class="text-on-surface-variant mt-2">No orders yet</p>
+            <button onclick="navigateTo('shop')" class="mt-3 bg-primary text-on-primary px-5 py-2 rounded-lg font-semibold text-sm">Start Shopping</button>
+          </div>
+        ` : `
+          <div class="space-y-3">
+            ${orders.slice().reverse().slice(0, 10).map(o => `
+              <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col md:flex-row md:items-center gap-3 hover:border-primary transition-colors">
+                <div class="flex items-center gap-3 flex-1 min-w-0">
+                  <div class="h-12 w-12 rounded-lg bg-primary-container text-primary flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined">package_2</span>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <p class="font-bold text-on-surface">${o.id || "Order"}</p>
+                      ${statusBadge(o.status)}
+                    </div>
+                    <p class="text-xs text-on-surface-variant">${(o.items || []).length} item(s) • ${new Date(o.date || o.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+                  </div>
+                </div>
+                <div class="text-right shrink-0">
+                  <p class="font-bold text-primary">₹${Number(o.total || 0).toLocaleString("en-IN")}</p>
+                  <p class="text-xs text-on-surface-variant">${(o.paymentMethod || "cod").toUpperCase()}</p>
+                </div>
+                <button onclick="viewOrderDetails('${o.id}')" class="shrink-0 border border-outline-variant px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-surface-variant">Details</button>
+              </div>
+            `).join("")}
+          </div>
+        `}
+      </section>
+    </main>`;
+}
+
 function renderComingSoonPage() {
   return `
     <main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-section-gap-mobile md:py-section-gap flex flex-col items-center text-center pb-24 md:pb-0">
@@ -2545,6 +2691,9 @@ function renderApp() {
       break;
     case 'auth':
       pageContent = renderAuthPage();
+      break;
+    case 'profile':
+      pageContent = renderProfilePage();
       break;
     case 'coming-soon':
       pageContent = renderComingSoonPage();

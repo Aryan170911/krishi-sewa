@@ -239,8 +239,23 @@ const SESSIONS = new Map(); // token -> { email, createdAt }
 const SESSION_COOKIE = "krishi_session";
 const OTP_TTL_MS = 10 * 60 * 1000;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const PASSWORD_PEPPER = "krishi_sewa_pepper_v1";
 function newCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
 function newToken() { return crypto.randomBytes(24).toString("hex"); }
+// scrypt-based password hashing (no native deps)
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password + PASSWORD_PEPPER, salt, 64).toString("hex");
+  return `scrypt$${salt}$${hash}`;
+}
+function verifyPassword(password, stored) {
+  try {
+    const [algo, salt, hash] = String(stored).split("$");
+    if (algo !== "scrypt" || !salt || !hash) return false;
+    const test = crypto.scryptSync(password + PASSWORD_PEPPER, salt, 64).toString("hex");
+    return crypto.timingSafeEqual(Buffer.from(test, "hex"), Buffer.from(hash, "hex"));
+  } catch { return false; }
+}
 function loadAuth() {
   try { return JSON.parse(fs.readFileSync(AUTH_FILE, "utf8")); } catch { return { users: {} }; }
 }
@@ -253,16 +268,23 @@ function getSession(req) {
   if (Date.now() - s.createdAt > SESSION_TTL_MS) { SESSIONS.delete(token); return null; }
   return { token, ...s };
 }
-app.post("/api/auth/send-otp", loginLimiter, async (req, res) => {
+function issueSession(res, email, name) {
+  const token = newToken();
+  SESSIONS.set(token, { email, name, createdAt: Date.now() });
+  res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", secure: IS_PROD, maxAge: SESSION_TTL_MS });
+  return token;
+}
+function validatePassword(pw) {
+  if (typeof pw !== "string" || pw.length < 8) return "Password must be at least 8 characters";
+  if (!/[A-Z]/.test(pw)) return "Password needs at least 1 uppercase letter";
+  if (!/[a-z]/.test(pw)) return "Password needs at least 1 lowercase letter";
+  if (!/[0-9]/.test(pw)) return "Password needs at least 1 number";
+  if (!/[^A-Za-z0-9]/.test(pw)) return "Password needs at least 1 special character";
+  return null;
+}
+async function sendOtpEmail(email, code, name) {
+  if (!resend) return { error: "Email not configured on server (RESEND_API_KEY missing)" };
   try {
-    const email = String(req.body?.email || "").trim().toLowerCase();
-    const name = String(req.body?.name || "").trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Valid email required" });
-    if (!resend) return res.status(503).json({ error: "Email not configured on server (RESEND_API_KEY missing)" });
-    const code = newCode();
-    const expiresAt = Date.now() + OTP_TTL_MS;
-    otpStore.set(email, { code, expiresAt, attempts: 0, name });
-    console.log(`[OTP] ${email} -> ${code} (expires in 10min)`);
     const { data, error } = await resend.emails.send({
       from: EMAIL_FROM,
       to: [email],
@@ -276,36 +298,117 @@ app.post("/api/auth/send-otp", loginLimiter, async (req, res) => {
       </div>`,
       text: `Your Krishi Sewa code is ${code}. Expires in 10 min.`
     });
-    if (error) {
-      console.error("[OTP] Resend error:", error);
-      return res.status(502).json({ error: "Failed to send email: " + (error.message || "unknown") });
-    }
-    res.json({ ok: true, message: "OTP sent to " + email, emailId: data?.id });
+    if (error) return { error: "Failed to send email: " + (error.message || "unknown") };
+    return { ok: true, emailId: data?.id };
+  } catch (e) { return { error: e.message }; }
+}
+
+// ============================================
+// AUTH: Signup (1x OTP) / Login (password) / Forgot (OTP + new password)
+// ============================================
+app.post("/api/auth/signup", loginLimiter, async (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const name = String(req.body?.name || "").trim();
+    const password = String(req.body?.password || "");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Valid email required" });
+    if (!name) return res.status(400).json({ error: "Name required" });
+    const pwErr = validatePassword(password);
+    if (pwErr) return res.status(400).json({ error: pwErr });
+    const auth = loadAuth();
+    if (auth.users[email]) return res.status(409).json({ error: "Account already exists with this email — try logging in" });
+    const code = newCode();
+    otpStore.set(email, { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0, name, password, purpose: "signup" });
+    console.log(`[OTP signup] ${email} -> ${code}`);
+    const r = await sendOtpEmail(email, code, name);
+    if (r.error) return res.status(502).json({ error: r.error });
+    res.json({ ok: true, message: "Code sent to " + email, emailId: r.emailId });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.post("/api/auth/verify-otp", loginLimiter, (req, res) => {
+app.post("/api/auth/verify-signup", loginLimiter, (req, res) => {
   try {
     const email = String(req.body?.email || "").trim().toLowerCase();
     const code = String(req.body?.code || "").trim();
     if (!email || !code) return res.status(400).json({ error: "Email and code required" });
     const rec = otpStore.get(email);
-    if (!rec) return res.status(400).json({ error: "No OTP requested for this email" });
-    if (Date.now() > rec.expiresAt) { otpStore.delete(email); return res.status(400).json({ error: "Code expired, request a new one" }); }
-    if (rec.attempts >= 5) { otpStore.delete(email); return res.status(429).json({ error: "Too many attempts, request a new code" }); }
+    if (!rec || rec.purpose !== "signup") return res.status(400).json({ error: "No signup in progress for this email" });
+    if (Date.now() > rec.expiresAt) { otpStore.delete(email); return res.status(400).json({ error: "Code expired — restart signup" }); }
+    if (rec.attempts >= 5) { otpStore.delete(email); return res.status(429).json({ error: "Too many attempts — restart signup" }); }
     if (rec.code !== code) { rec.attempts++; return res.status(400).json({ error: `Wrong code (${5-rec.attempts} attempts left)` }); }
-    // success — create user + session
+    // success — create user
     const auth = loadAuth();
-    let user = auth.users[email];
-    if (!user) {
-      user = { email, name: rec.name || email.split("@")[0], createdAt: new Date().toISOString() };
-      auth.users[email] = user;
-      saveAuth(auth);
-    } else if (rec.name && rec.name !== user.name) { user.name = rec.name; auth.users[email] = user; saveAuth(auth); }
+    if (auth.users[email]) return res.status(409).json({ error: "Account already exists" });
+    const user = { email, name: rec.name, passwordHash: hashPassword(rec.password), createdAt: new Date().toISOString() };
+    auth.users[email] = user;
+    saveAuth(auth);
     otpStore.delete(email);
-    const token = newToken();
-    SESSIONS.set(token, { email, name: user.name, createdAt: Date.now() });
-    res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", secure: IS_PROD, maxAge: SESSION_TTL_MS });
+    issueSession(res, email, rec.name);
     res.json({ ok: true, user: { email: user.email, name: user.name } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/api/auth/login", loginLimiter, (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const password = String(req.body?.password || "");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Valid email required" });
+    if (!password) return res.status(400).json({ error: "Password required" });
+    const auth = loadAuth();
+    const user = auth.users[email];
+    if (!user) return res.status(404).json({ error: "No account with this email — sign up first" });
+    if (!verifyPassword(password, user.passwordHash)) return res.status(401).json({ error: "Wrong password — try again or use 'Forgot password?'" });
+    issueSession(res, email, user.name);
+    res.json({ ok: true, user: { email: user.email, name: user.name } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/api/auth/forgot", loginLimiter, async (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Valid email required" });
+    const auth = loadAuth();
+    if (!auth.users[email]) return res.status(404).json({ error: "No account with this email — sign up first" });
+    const code = newCode();
+    otpStore.set(email, { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0, purpose: "reset" });
+    console.log(`[OTP reset] ${email} -> ${code}`);
+    const r = await sendOtpEmail(email, code, "");
+    if (r.error) return res.status(502).json({ error: r.error });
+    res.json({ ok: true, message: "Reset code sent to " + email });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/api/auth/reset-password", loginLimiter, (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const code = String(req.body?.code || "").trim();
+    const newPassword = String(req.body?.password || "");
+    if (!email || !code || !newPassword) return res.status(400).json({ error: "Email, code and new password required" });
+    const pwErr = validatePassword(newPassword);
+    if (pwErr) return res.status(400).json({ error: pwErr });
+    const rec = otpStore.get(email);
+    if (!rec || rec.purpose !== "reset") return res.status(400).json({ error: "No reset in progress — request a new code" });
+    if (Date.now() > rec.expiresAt) { otpStore.delete(email); return res.status(400).json({ error: "Code expired — request a new one" }); }
+    if (rec.attempts >= 5) { otpStore.delete(email); return res.status(429).json({ error: "Too many attempts — request a new code" }); }
+    if (rec.code !== code) { rec.attempts++; return res.status(400).json({ error: `Wrong code (${5-rec.attempts} attempts left)` }); }
+    const auth = loadAuth();
+    const user = auth.users[email];
+    if (!user) return res.status(404).json({ error: "Account not found" });
+    user.passwordHash = hashPassword(newPassword);
+    auth.users[email] = user;
+    saveAuth(auth);
+    otpStore.delete(email);
+    issueSession(res, email, user.name);
+    res.json({ ok: true, user: { email: user.email, name: user.name } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/api/auth/resend-code", loginLimiter, async (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const rec = otpStore.get(email);
+    if (!rec) return res.status(400).json({ error: "No signup or reset in progress" });
+    const code = newCode();
+    rec.code = code; rec.expiresAt = Date.now() + OTP_TTL_MS; rec.attempts = 0;
+    console.log(`[OTP resend] ${email} -> ${code} (${rec.purpose})`);
+    const r = await sendOtpEmail(email, code, rec.name || "");
+    if (r.error) return res.status(502).json({ error: r.error });
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get("/api/auth/me", (req, res) => {

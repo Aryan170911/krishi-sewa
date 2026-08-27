@@ -390,9 +390,9 @@ const state = {
   isCartSidebarOpen: false,
   priceRange: "all",
   authUser: JSON.parse(localStorage.getItem("krishi_user") || "null"),
-  authMode: "login", // login | signup | otp | forgot
+  authMode: "login", // login | signup | verify | forgot | reset
   authPendingEmail: "",
-  authPendingName: ""
+  authPendingPurpose: "" // signup | reset
 };
 
 // ============================================
@@ -1841,41 +1841,85 @@ function renderAuthPage() {
   return `
   <main class="flex-grow w-full max-w-md mx-auto px-4 py-8">
     <div class="bg-white border border-outline-variant rounded-2xl p-6">
-      <h1 class="text-2xl font-bold text-primary text-center">${mode==="signup" ? "Create Account" : "Welcome back"}</h1>
-      <p class="text-center text-on-surface-variant text-sm mb-6">${mode==="signup" ? "Join Krishi Sewa — secure, no password needed" : "Sign in to your account"}</p>
-      <div class="flex gap-2 mb-6">
-        <button onclick="state.authMode='login'; state.authPendingEmail=''; renderApp()" class="flex-1 py-2.5 rounded-lg text-sm font-bold ${mode!=='signup' && mode!=='forgot' ?'bg-primary text-on-primary':'bg-surface-variant text-on-surface-variant'}">Log In</button>
-        <button onclick="state.authMode='signup'; state.authPendingEmail=''; renderApp()" class="flex-1 py-2.5 rounded-lg text-sm font-bold ${mode==='signup'?'bg-primary text-on-primary':'bg-surface-variant text-on-surface-variant'}">Sign Up</button>
-      </div>
-      ${mode==="forgot" ? `
-        <form onsubmit="handleResetSend(event)" class="space-y-3">
-          <p class="text-sm text-on-surface-variant text-center">Enter your email — we'll send a secure code to get you back in.</p>
+      <h1 class="text-2xl font-bold text-primary text-center">${mode==="signup" ? "Create Account" : mode==="verify" ? "Verify Your Email" : mode==="forgot" ? "Reset Password" : mode==="reset" ? "Set New Password" : "Welcome back"}</h1>
+      <p class="text-center text-on-surface-variant text-sm mb-6">${mode==="signup" ? "Sign up once — secure password + email verification" : mode==="verify" ? `Enter the 6-digit code we sent to <b>${state.authPendingEmail}</b>` : mode==="forgot" ? "We'll email a code to reset your password" : mode==="reset" ? "Choose a strong new password" : "Log in with email + password"}</p>
+      ${(mode==="login" || mode==="signup") ? `
+        <div class="flex gap-2 mb-6">
+          <button onclick="state.authMode='login'; state.authPendingEmail=''; renderApp()" class="flex-1 py-2.5 rounded-lg text-sm font-bold ${mode==='login'?'bg-primary text-on-primary':'bg-surface-variant text-on-surface-variant'}">Log In</button>
+          <button onclick="state.authMode='signup'; state.authPendingEmail=''; renderApp()" class="flex-1 py-2.5 rounded-lg text-sm font-bold ${mode==='signup'?'bg-primary text-on-primary':'bg-surface-variant text-on-surface-variant'}">Sign Up</button>
+        </div>` : ""}
+      ${mode==="signup" ? `
+        <form onsubmit="handleSignup(event)" class="space-y-3">
+          <input id="authName" placeholder="Full name" required class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <input id="authEmail" type="email" required placeholder="Your email" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <div>
+            <input id="authPassword" type="password" required minlength="8" placeholder="Password (8+ chars)" oninput="updatePwStrength(this.value)" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+            <div class="mt-2 space-y-1 text-xs">
+              <div class="flex gap-1 h-1.5">
+                <div id="pwBar1" class="flex-1 rounded bg-surface-variant"></div>
+                <div id="pwBar2" class="flex-1 rounded bg-surface-variant"></div>
+                <div id="pwBar3" class="flex-1 rounded bg-surface-variant"></div>
+                <div id="pwBar4" class="flex-1 rounded bg-surface-variant"></div>
+              </div>
+              <div id="pwLabel" class="text-on-surface-variant">Enter a password</div>
+              <ul class="grid grid-cols-2 gap-x-2 gap-y-0.5 text-on-surface-variant">
+                <li id="pwRule_len" class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">circle</span> 8+ chars</li>
+                <li id="pwRule_cap" class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">circle</span> 1 uppercase</li>
+                <li id="pwRule_low" class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">circle</span> 1 lowercase</li>
+                <li id="pwRule_num" class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">circle</span> 1 number</li>
+                <li id="pwRule_sym" class="flex items-center gap-1 col-span-2"><span class="material-symbols-outlined text-sm">circle</span> 1 special character (!@#$%...)</li>
+              </ul>
+            </div>
+          </div>
+          <button id="authSignupBtn" type="submit" disabled class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold disabled:opacity-40 disabled:cursor-not-allowed">Create Account</button>
+          <p id="authMsg" class="text-center text-sm"></p>
+        </form>
+      ` : mode==="verify" ? `
+        <div class="space-y-3">
+          <input id="authCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000" class="w-full text-center text-3xl tracking-[0.5em] font-bold border-2 border-primary rounded-lg px-3 py-4">
+          <button onclick="handleVerifyCode()" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Verify & Create Account</button>
+          <button onclick="handleResendCode()" type="button" class="w-full border border-outline-variant py-2.5 rounded-lg font-semibold">Resend Code</button>
+          <p id="authMsg" class="text-center text-sm"></p>
+          <button type="button" onclick="state.authMode='${state.authPendingPurpose==='reset'?'forgot':'signup'}'; renderApp()" class="w-full text-sm text-on-surface-variant hover:text-primary">← Back</button>
+        </div>
+      ` : mode==="forgot" ? `
+        <form onsubmit="handleForgot(event)" class="space-y-3">
+          <p class="text-sm text-on-surface-variant text-center">Enter your account email — we'll send a 6-digit code to reset your password.</p>
           <input id="authEmail" type="email" required placeholder="Your email" value="${state.authPendingEmail||''}" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <button type="submit" class="w-full bg-accent-ochre text-white py-3 rounded-lg font-bold">Send Recovery Code</button>
+          <button type="submit" class="w-full bg-accent-ochre text-white py-3 rounded-lg font-bold">Send Reset Code</button>
           <p id="authMsg" class="text-center text-sm"></p>
           <button type="button" onclick="state.authMode='login'; renderApp()" class="w-full text-sm text-on-surface-variant hover:text-primary">← Back to login</button>
         </form>
-      ` : mode==="signup" ? `
-        <form onsubmit="handleSignup(event)" class="space-y-3">
-          <input id="authName" placeholder="Full name" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <input id="authEmail" type="email" required placeholder="Your email" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Create Account</button>
+      ` : mode==="reset" ? `
+        <form onsubmit="handleResetPassword(event)" class="space-y-3">
+          <input id="authCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required placeholder="6-digit code" class="w-full text-center text-2xl tracking-[0.5em] font-bold border-2 border-primary rounded-lg px-3 py-4">
+          <div>
+            <input id="authPassword" type="password" required minlength="8" placeholder="New password" oninput="updatePwStrength(this.value)" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+            <div class="mt-2 space-y-1 text-xs">
+              <div class="flex gap-1 h-1.5">
+                <div id="pwBar1" class="flex-1 rounded bg-surface-variant"></div>
+                <div id="pwBar2" class="flex-1 rounded bg-surface-variant"></div>
+                <div id="pwBar3" class="flex-1 rounded bg-surface-variant"></div>
+                <div id="pwBar4" class="flex-1 rounded bg-surface-variant"></div>
+              </div>
+              <div id="pwLabel" class="text-on-surface-variant">Enter a password</div>
+              <ul class="grid grid-cols-2 gap-x-2 gap-y-0.5 text-on-surface-variant">
+                <li id="pwRule_len" class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">circle</span> 8+ chars</li>
+                <li id="pwRule_cap" class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">circle</span> 1 uppercase</li>
+                <li id="pwRule_low" class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">circle</span> 1 lowercase</li>
+                <li id="pwRule_num" class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">circle</span> 1 number</li>
+                <li id="pwRule_sym" class="flex items-center gap-1 col-span-2"><span class="material-symbols-outlined text-sm">circle</span> 1 special character (!@#$%...)</li>
+              </ul>
+            </div>
+          </div>
+          <button id="authSignupBtn" type="submit" disabled class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold disabled:opacity-40 disabled:cursor-not-allowed">Set New Password</button>
           <p id="authMsg" class="text-center text-sm"></p>
-          <p class="text-center text-xs text-on-surface-variant">We'll email you a secure code to verify — no password needed.</p>
         </form>
-      ` : mode==="otp" ? `
-        <div class="space-y-3">
-          <p class="text-sm text-on-surface-variant text-center">We sent a code to <b class="text-primary">${state.authPendingEmail||'your email'}</b></p>
-          <input id="authEmail" type="email" required placeholder="Your email" value="${state.authPendingEmail||''}" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <button onclick="(async()=>{const e=document.getElementById('authEmail').value.trim(); if(e){const r=await apiPost('/auth/send-otp',{email:e}); if(!r.error){state.authPendingEmail=e; toast('Code sent to '+e);}}})()" class="w-full border border-outline-variant py-2.5 rounded-lg font-semibold">Resend Code</button>
-          <input id="authCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000" class="w-full text-center text-2xl tracking-[0.5em] font-bold border-2 border-primary rounded-lg px-3 py-4">
-          <button type="button" onclick="handleOtpVerify()" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Verify & Continue</button>
-          <p id="authMsg" class="text-center text-sm"></p>
-        </div>
       ` : `
         <form onsubmit="handleLogin(event)" class="space-y-3">
           <input id="authEmail" type="email" required placeholder="Your email" value="${state.authPendingEmail||''}" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Send Login Code</button>
+          <input id="authPassword" type="password" required placeholder="Your password" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Log In</button>
           <p id="authMsg" class="text-center text-sm"></p>
           <div class="text-center">
             <button type="button" onclick="state.authMode='forgot'; state.authPendingEmail=document.getElementById('authEmail')?.value||''; renderApp()" class="text-sm text-primary hover:underline font-semibold">Forgot password?</button>
@@ -1893,70 +1937,123 @@ function renderAuthPage() {
     </div>
   </main>`;
 }
+
+// Password strength checker (live, client-side)
+function checkPasswordStrength(pw) {
+  const rules = { len: pw.length >= 8, cap: /[A-Z]/.test(pw), low: /[a-z]/.test(pw), num: /[0-9]/.test(pw), sym: /[^A-Za-z0-9]/.test(pw) };
+  const passed = Object.values(rules).filter(Boolean).length;
+  return { rules, score: passed, valid: passed === 5 };
+}
+function updatePwStrength(pw) {
+  const { rules, score, valid } = checkPasswordStrength(pw);
+  const colors = ["bg-error", "bg-error", "bg-accent-ochre", "bg-tertiary", "bg-primary"];
+  for (let i = 1; i <= 4; i++) {
+    const bar = document.getElementById("pwBar" + i);
+    if (!bar) continue;
+    bar.className = "flex-1 rounded " + (i <= score ? colors[score] : "bg-surface-variant");
+  }
+  const labels = ["Too weak", "Weak", "Fair", "Good", "Strong"];
+  const label = document.getElementById("pwLabel");
+  if (label) { label.textContent = pw ? labels[score] : "Enter a password"; label.className = score <= 2 ? "text-error" : score === 3 ? "text-accent-ochre" : "text-primary"; }
+  const map = { pwRule_len: rules.len, pwRule_cap: rules.cap, pwRule_low: rules.low, pwRule_num: rules.num, pwRule_sym: rules.sym };
+  Object.entries(map).forEach(([id, ok]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = "flex items-center gap-1 " + (ok ? "text-primary" : "text-on-surface-variant");
+    const icon = el.querySelector(".material-symbols-outlined");
+    if (icon) icon.textContent = ok ? "check_circle" : "circle";
+  });
+  const btn = document.getElementById("authSignupBtn");
+  if (btn) btn.disabled = !valid;
+}
+
 async function handleSignup(e){
   e.preventDefault();
   const email=document.getElementById("authEmail").value.trim();
-  const name=document.getElementById("authName")?.value || "";
+  const name=document.getElementById("authName").value.trim();
+  const password=document.getElementById("authPassword").value;
+  const { valid } = checkPasswordStrength(password);
+  if (!valid) { toast("Password too weak — check requirements"); return; }
   const msg=document.getElementById("authMsg");
-  msg.textContent="Sending OTP to "+email+"..."; msg.className="text-center text-sm text-on-surface-variant";
+  msg.textContent="Sending code to "+email+"..."; msg.className="text-center text-sm text-on-surface-variant";
   try {
-    const r = await apiPost("/auth/send-otp", { email, name });
+    const r = await apiPost("/auth/signup", { email, name, password });
     if (r.error) { msg.textContent = r.error; msg.className="text-center text-sm text-error"; return; }
-    state.authMode = "otp"; state.authPendingEmail = email; state.authPendingName = name; renderApp();
-    toast("OTP sent to "+email);
+    state.authPendingEmail = email; state.authPendingPurpose = "signup"; state.authMode = "verify"; renderApp();
+    toast("Code sent to "+email);
   } catch (e) { msg.textContent=e.message; msg.className="text-center text-sm text-error"; }
 }
-async function handleLogin(e){
-  e.preventDefault();
-  const email=document.getElementById("authEmail").value.trim();
+
+async function handleVerifyCode(){
+  const email = state.authPendingEmail;
+  const code = document.getElementById("authCode")?.value?.trim();
   const msg=document.getElementById("authMsg");
-  msg.textContent="Sending OTP..."; msg.className="text-center text-sm text-on-surface-variant";
-  try {
-    const r = await apiPost("/auth/send-otp", { email });
-    if (r.error) { msg.textContent = r.error; msg.className="text-center text-sm text-error"; return; }
-    state.authMode = "otp"; state.authPendingEmail = email; renderApp();
-    toast("OTP sent to "+email);
-  } catch (e) { msg.textContent=e.message; msg.className="text-center text-sm text-error"; }
-}
-async function handleOtpSend(e){
-  e.preventDefault();
-  const email=document.getElementById("authEmail").value.trim();
-  const msg=document.getElementById("authMsg");
-  msg.textContent="Sending OTP..."; msg.className="text-center text-sm text-on-surface-variant";
-  try {
-    const r = await apiPost("/auth/send-otp", { email });
-    if (r.error) { msg.textContent = r.error; msg.className="text-center text-sm text-error"; return; }
-    state.authPendingEmail = email; msg.textContent="✅ OTP sent to "+email+" — check your email!"; msg.className="text-center text-sm text-green-700";
-    toast("OTP sent");
-  } catch (e) { msg.textContent=e.message; msg.className="text-center text-sm text-error"; }
-}
-async function handleOtpVerify(){
-  const email=document.getElementById("authEmail")?.value?.trim() || state.authPendingEmail;
-  const code=document.getElementById("authOtp")?.value?.trim() || document.getElementById("authCode")?.value?.trim();
-  const msg=document.getElementById("authMsg");
-  if(!email||!code){ msg.textContent="Enter email and 6-digit code"; return; }
+  if(!email||!code){ msg.textContent="Enter the 6-digit code"; return; }
   msg.textContent="Verifying..."; msg.className="text-center text-sm text-on-surface-variant";
   try {
-    const r = await apiPost("/auth/verify-otp", { email, code });
+    const r = await apiPost("/auth/verify-signup", { email, code });
     if (r.error) { msg.textContent = r.error; msg.className="text-center text-sm text-error"; return; }
     state.authUser = r.user;
     localStorage.setItem("krishi_user", JSON.stringify(r.user));
-    msg.textContent="✅ Verified! Welcome "+r.user.name; msg.className="text-center text-sm text-green-700";
+    msg.textContent="✅ Welcome "+r.user.name+"!"; msg.className="text-center text-sm text-green-700";
     toast("Welcome "+r.user.name);
-    setTimeout(()=>navigateTo("shop"), 600);
+    setTimeout(()=>navigateTo("shop"), 800);
   } catch (e) { msg.textContent=e.message; msg.className="text-center text-sm text-error"; }
 }
-async function handleResetSend(e){
+
+async function handleResendCode(){
+  const email = state.authPendingEmail;
+  if (!email) return;
+  try { await apiPost("/auth/resend-code", { email }); toast("Code resent to "+email); }
+  catch (e) { toast(e.message); }
+}
+
+async function handleLogin(e){
+  e.preventDefault();
+  const email=document.getElementById("authEmail").value.trim();
+  const password=document.getElementById("authPassword").value;
+  const msg=document.getElementById("authMsg");
+  msg.textContent="Logging in..."; msg.className="text-center text-sm text-on-surface-variant";
+  try {
+    const r = await apiPost("/auth/login", { email, password });
+    if (r.error) { msg.textContent = r.error; msg.className="text-center text-sm text-error"; return; }
+    state.authUser = r.user;
+    localStorage.setItem("krishi_user", JSON.stringify(r.user));
+    msg.textContent="✅ Welcome back, "+r.user.name; msg.className="text-center text-sm text-green-700";
+    toast("Welcome "+r.user.name);
+    setTimeout(()=>navigateTo("shop"), 500);
+  } catch (e) { msg.textContent=e.message; msg.className="text-center text-sm text-error"; }
+}
+
+async function handleForgot(e){
   e.preventDefault();
   const email=document.getElementById("authEmail").value.trim();
   const msg=document.getElementById("authMsg");
-  msg.textContent="Sending OTP..."; msg.className="text-center text-sm text-on-surface-variant";
+  msg.textContent="Sending code..."; msg.className="text-center text-sm text-on-surface-variant";
   try {
-    const r = await apiPost("/auth/send-otp", { email });
+    const r = await apiPost("/auth/forgot", { email });
     if (r.error) { msg.textContent = r.error; msg.className="text-center text-sm text-error"; return; }
-    state.authMode = "otp"; state.authPendingEmail = email; renderApp();
-    msg.textContent="✅ OTP sent — verify to continue"; msg.className="text-center text-sm text-green-700";
-    toast("OTP sent");
+    state.authPendingEmail = email; state.authPendingPurpose = "reset"; state.authMode = "reset"; renderApp();
+    toast("Reset code sent to "+email);
+  } catch (e) { msg.textContent=e.message; msg.className="text-center text-sm text-error"; }
+}
+
+async function handleResetPassword(e){
+  e.preventDefault();
+  const code = document.getElementById("authCode").value.trim();
+  const password = document.getElementById("authPassword").value;
+  const { valid } = checkPasswordStrength(password);
+  if (!valid) { toast("Password too weak — check requirements"); return; }
+  const msg=document.getElementById("authMsg");
+  msg.textContent="Resetting..."; msg.className="text-center text-sm text-on-surface-variant";
+  try {
+    const r = await apiPost("/auth/reset-password", { email: state.authPendingEmail, code, password });
+    if (r.error) { msg.textContent = r.error; msg.className="text-center text-sm text-error"; return; }
+    state.authUser = r.user;
+    localStorage.setItem("krishi_user", JSON.stringify(r.user));
+    msg.textContent="✅ Password reset! Welcome back, "+r.user.name; msg.className="text-center text-sm text-green-700";
+    toast("Password reset");
+    setTimeout(()=>navigateTo("shop"), 800);
   } catch (e) { msg.textContent=e.message; msg.className="text-center text-sm text-error"; }
 }
 async function handleLogout(){

@@ -455,16 +455,56 @@ def get_config():
     })
 
 # ============================================
-# EMAIL OTP — Resend (no Supabase, no SMTP, works on Render)
+# AUTH: Signup (1x OTP) / Login (password) / Forgot (OTP + new password)
 # ============================================
-OTP_STORE = {}  # email -> {code, expires_at, attempts, name}
-AUTH_DB = {}     # email -> {email, name, created_at}
+OTP_STORE = {}  # email -> {code, expires_at, attempts, name, password, purpose}
+AUTH_DB = {}     # email -> {email, name, password_hash, created_at}
 SESSIONS = {}    # token -> {email, name, created_at}
-OTP_TTL = 600    # 10 min
+OTP_TTL = 600
 SESSION_TTL = 30 * 24 * 3600
+PASSWORD_PEPPER = "krishi_sewa_pepper_v1"
 
 def _new_code(): return str(secrets.randbelow(900000) + 100000)
 def _new_token(): return secrets.token_hex(24)
+def _hash_password(pw):
+    salt = secrets.token_hex(16)
+    h = hashlib.scrypt((pw + PASSWORD_PEPPER).encode("utf-8"), salt=salt.encode("utf-8"), n=16384, r=8, p=1, dklen=64)
+    return f"scrypt${salt}${h.hex()}"
+def _verify_password(pw, stored):
+    try:
+        algo, salt, hexhash = str(stored).split("$", 2)
+        if algo != "scrypt" or not salt or not hexhash: return False
+        h = hashlib.scrypt((pw + PASSWORD_PEPPER).encode("utf-8"), salt=salt.encode("utf-8"), n=16384, r=8, p=1, dklen=64)
+        return hmac.compare_digest(h.hex(), hexhash)
+    except: return False
+def _validate_password(pw):
+    if not isinstance(pw, str) or len(pw) < 8: return "Password must be at least 8 characters"
+    if not re.search(r"[A-Z]", pw): return "Password needs at least 1 uppercase letter"
+    if not re.search(r"[a-z]", pw): return "Password needs at least 1 lowercase letter"
+    if not re.search(r"[0-9]", pw): return "Password needs at least 1 number"
+    if not re.search(r"[^A-Za-z0-9]", pw): return "Password needs at least 1 special character"
+    return None
+def _issue_session(resp, email, name):
+    token = _new_token()
+    SESSIONS[token] = {"email": email, "name": name, "created_at": time.time()}
+    resp.set_cookie("krishi_session", token, max_age=SESSION_TTL, httponly=True, samesite="Lax", secure=False)
+def _send_otp_email(email, code, name):
+    if not resend_client: return False, "Email not configured on server (RESEND_API_KEY missing)"
+    try:
+        resend_client.Emails.send({
+            "from": EMAIL_FROM, "to": [email],
+            "subject": f"{code} is your Krishi Sewa verification code",
+            "html": f"""<div style=\"font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#f5f5f0;border-radius:12px\">
+              <h2 style=\"color:#012d1d;margin:0 0 8px\">Krishi Sewa Foundation</h2>
+              <p style=\"color:#333;margin:0 0 16px\">{f'Hi {name}, here' if name else 'Here'}'s your verification code:</p>
+              <div style=\"background:#012d1d;color:#e8f5ed;font-size:36px;font-weight:bold;letter-spacing:8px;text-align:center;padding:20px;border-radius:8px\">{code}</div>
+              <p style=\"color:#666;margin:16px 0 0;font-size:13px\">This code expires in 10 minutes. If you didn't request it, ignore this email.</p>
+            </div>""",
+            "text": f"Your Krishi Sewa code is {code}. Expires in 10 min."
+        })
+        return True, None
+    except Exception as e:
+        return False, str(e)
 
 def _get_session(req):
     cookie = (req.headers.get("Cookie") or "")
@@ -482,66 +522,112 @@ def _get_session(req):
         return None
     return {"token": token, **s}
 
-@app.route("/api/auth/send-otp", methods=["POST"])
-def send_otp():
+@app.route("/api/auth/signup", methods=["POST"])
+def auth_signup():
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
     name = (data.get("name") or "").strip()
-    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
-        return jsonify({"error": "Valid email required"}), 400
-    if not resend_client:
-        return jsonify({"error": "Email not configured on server (RESEND_API_KEY missing)"}), 503
+    password = data.get("password") or ""
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email): return jsonify({"error":"Valid email required"}),400
+    if not name: return jsonify({"error":"Name required"}),400
+    err = _validate_password(password)
+    if err: return jsonify({"error": err}),400
+    if AUTH_DB.get(email): return jsonify({"error":"Account already exists with this email — try logging in"}),409
     code = _new_code()
-    OTP_STORE[email] = {"code": code, "expires_at": time.time() + OTP_TTL, "attempts": 0, "name": name}
-    print(f"[OTP] {email} -> {code} (expires in 10min)", flush=True)
-    try:
-        resend_client.Emails.send({
-            "from": EMAIL_FROM,
-            "to": [email],
-            "subject": f"{code} is your Krishi Sewa verification code",
-            "html": f"""<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#f5f5f0;border-radius:12px">
-              <h2 style="color:#012d1d;margin:0 0 8px">Krishi Sewa Foundation</h2>
-              <p style="color:#333;margin:0 0 16px">{f'Hi {name}, here' if name else 'Here'}'s your verification code:</p>
-              <div style="background:#012d1d;color:#e8f5ed;font-size:36px;font-weight:bold;letter-spacing:8px;text-align:center;padding:20px;border-radius:8px">{code}</div>
-              <p style="color:#666;margin:16px 0 0;font-size:13px">This code expires in 10 minutes. If you didn't request it, ignore this email.</p>
-            </div>""",
-            "text": f"Your Krishi Sewa code is {code}. Expires in 10 min."
-        })
-    except Exception as e:
-        print(f"[OTP] Resend error: {e}", flush=True)
-        return jsonify({"error": "Failed to send email: " + str(e)}), 502
-    resp = jsonify({"ok": True, "message": "OTP sent to " + email})
-    return resp, 200
+    OTP_STORE[email] = {"code": code, "expires_at": time.time() + OTP_TTL, "attempts": 0, "name": name, "password": password, "purpose": "signup"}
+    print(f"[OTP signup] {email} -> {code}", flush=True)
+    ok, err = _send_otp_email(email, code, name)
+    if not ok: return jsonify({"error": err or "send failed"}),502
+    return jsonify({"ok": True, "message": "Code sent to " + email})
 
-@app.route("/api/auth/verify-otp", methods=["POST"])
-def verify_otp():
+@app.route("/api/auth/verify-signup", methods=["POST"])
+def auth_verify_signup():
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
     code = (data.get("code") or "").strip()
-    if not email or not code:
-        return jsonify({"error": "Email and code required"}), 400
+    if not email or not code: return jsonify({"error":"Email and code required"}),400
     rec = OTP_STORE.get(email)
-    if not rec:
-        return jsonify({"error": "No OTP requested for this email"}), 400
+    if not rec or rec.get("purpose") != "signup": return jsonify({"error":"No signup in progress for this email"}),400
     if time.time() > rec["expires_at"]:
-        OTP_STORE.pop(email, None)
-        return jsonify({"error": "Code expired, request a new one"}), 400
+        OTP_STORE.pop(email, None); return jsonify({"error":"Code expired — restart signup"}),400
     if rec["attempts"] >= 5:
-        OTP_STORE.pop(email, None)
-        return jsonify({"error": "Too many attempts, request a new code"}), 429
+        OTP_STORE.pop(email, None); return jsonify({"error":"Too many attempts — restart signup"}),429
     if rec["code"] != code:
         rec["attempts"] += 1
-        return jsonify({"error": f"Wrong code ({5 - rec['attempts']} attempts left)"}), 400
-    user = AUTH_DB.get(email) or {"email": email, "name": rec.get("name") or email.split("@")[0], "created_at": datetime.utcnow().isoformat() + "Z"}
-    if not AUTH_DB.get(email) or (rec.get("name") and rec["name"] != user.get("name")):
-        if rec.get("name"): user["name"] = rec["name"]
-        AUTH_DB[email] = user
+        return jsonify({"error": f"Wrong code ({5-rec['attempts']} attempts left)"}),400
+    if AUTH_DB.get(email): return jsonify({"error":"Account already exists"}),409
+    AUTH_DB[email] = {"email": email, "name": rec["name"], "password_hash": _hash_password(rec["password"]), "created_at": datetime.now(timezone.utc).isoformat()}
     OTP_STORE.pop(email, None)
-    token = _new_token()
-    SESSIONS[token] = {"email": email, "name": user["name"], "created_at": time.time()}
-    resp = jsonify({"ok": True, "user": {"email": user["email"], "name": user["name"]}})
-    resp.set_cookie("krishi_session", token, max_age=SESSION_TTL, httponly=True, samesite="Lax", secure=False)
+    resp = jsonify({"ok": True, "user": {"email": email, "name": rec["name"]}})
+    _issue_session(resp, email, rec["name"])
     return resp, 200
+
+@app.route("/api/auth/login", methods=["POST"])
+def auth_login():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email): return jsonify({"error":"Valid email required"}),400
+    if not password: return jsonify({"error":"Password required"}),400
+    user = AUTH_DB.get(email)
+    if not user: return jsonify({"error":"No account with this email — sign up first"}),404
+    if not _verify_password(password, user["password_hash"]):
+        return jsonify({"error":"Wrong password — try again or use 'Forgot password?'"}),401
+    resp = jsonify({"ok": True, "user": {"email": user["email"], "name": user["name"]}})
+    _issue_session(resp, email, user["name"])
+    return resp, 200
+
+@app.route("/api/auth/forgot", methods=["POST"])
+def auth_forgot():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email): return jsonify({"error":"Valid email required"}),400
+    if not AUTH_DB.get(email): return jsonify({"error":"No account with this email — sign up first"}),404
+    code = _new_code()
+    OTP_STORE[email] = {"code": code, "expires_at": time.time() + OTP_TTL, "attempts": 0, "purpose": "reset"}
+    print(f"[OTP reset] {email} -> {code}", flush=True)
+    ok, err = _send_otp_email(email, code, "")
+    if not ok: return jsonify({"error": err or "send failed"}),502
+    return jsonify({"ok": True, "message": "Reset code sent to " + email})
+
+@app.route("/api/auth/reset-password", methods=["POST"])
+def auth_reset_password():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    code = (data.get("code") or "").strip()
+    new_pw = data.get("password") or ""
+    if not email or not code or not new_pw: return jsonify({"error":"Email, code and new password required"}),400
+    err = _validate_password(new_pw)
+    if err: return jsonify({"error": err}),400
+    rec = OTP_STORE.get(email)
+    if not rec or rec.get("purpose") != "reset": return jsonify({"error":"No reset in progress — request a new code"}),400
+    if time.time() > rec["expires_at"]:
+        OTP_STORE.pop(email, None); return jsonify({"error":"Code expired — request a new one"}),400
+    if rec["attempts"] >= 5:
+        OTP_STORE.pop(email, None); return jsonify({"error":"Too many attempts — request a new code"}),429
+    if rec["code"] != code:
+        rec["attempts"] += 1
+        return jsonify({"error": f"Wrong code ({5-rec['attempts']} attempts left)"}),400
+    user = AUTH_DB.get(email)
+    if not user: return jsonify({"error":"Account not found"}),404
+    user["password_hash"] = _hash_password(new_pw)
+    OTP_STORE.pop(email, None)
+    resp = jsonify({"ok": True, "user": {"email": user["email"], "name": user["name"]}})
+    _issue_session(resp, email, user["name"])
+    return resp, 200
+
+@app.route("/api/auth/resend-code", methods=["POST"])
+def auth_resend_code():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    rec = OTP_STORE.get(email)
+    if not rec: return jsonify({"error":"No signup or reset in progress"}),400
+    code = _new_code()
+    rec["code"] = code; rec["expires_at"] = time.time() + OTP_TTL; rec["attempts"] = 0
+    print(f"[OTP resend] {email} -> {code} ({rec.get('purpose')})", flush=True)
+    ok, err = _send_otp_email(email, code, rec.get("name") or "")
+    if not ok: return jsonify({"error": err or "send failed"}),502
+    return jsonify({"ok": True})
 
 @app.route("/api/auth/me")
 def auth_me():

@@ -340,11 +340,12 @@ let activeEvents = mockEvents;
 let apiAvailable = false;
 
 async function syncFromBackend() {
+  const ordersPath = state.authUser?.email ? `/orders?email=${encodeURIComponent(state.authUser.email)}` : "/orders";
   const [productsData, categoriesData, eventsData, ordersData] = await Promise.all([
     apiGet("/products"),
     apiGet("/categories"),
     apiGet("/events"),
-    apiGet("/orders")
+    apiGet(ordersPath)
   ]);
   if (productsData) {
     activeProducts = productsData;
@@ -354,7 +355,7 @@ async function syncFromBackend() {
   if (eventsData) activeEvents = eventsData;
   if (ordersData) {
     // Merge backend orders with local orders (backend is source of truth when available)
-    if (ordersData.length > 0) {
+    if (ordersData.length > 0 || state.authUser) {
       state.orders = ordersData;
       saveOrders();
       if (!state.lastOrder && ordersData.length > 0) {
@@ -1346,7 +1347,7 @@ function renderCheckoutPage() {
               </div>
               <div class="md:col-span-2">
                 <label class="block text-label-md font-label-md text-on-surface-variant mb-unit" for="phone">Phone Number</label>
-                <input class="w-full bg-surface-container-low border-b border-outline-variant focus:border-primary focus:ring-0 px-4 py-3 text-body-md text-on-surface rounded-t-DEFAULT outline-none transition-colors" id="phone" placeholder="+91 98765 43210" type="tel" value="${state.billingAddress.phone || ''}" required>
+                <input class="w-full bg-surface-container-low border-b border-outline-variant focus:border-primary focus:ring-0 px-4 py-3 text-body-md text-on-surface rounded-t-DEFAULT outline-none transition-colors" id="phone" placeholder="10-digit phone (e.g. 9876543210)" type="tel" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" minlength="10" value="${(state.billingAddress.phone || '').replace(/\D/g,'').slice(0,10)}" required oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)">
               </div>
               <div class="md:col-span-2">
                 <label class="block text-label-md font-label-md text-on-surface-variant mb-unit" for="address">Address</label>
@@ -2292,10 +2293,18 @@ async function placeOrder() {
     }
     state.cart = [];
     saveCart();
+    // After successful order, if logged in, refresh orders from server so they sync across devices
+    if (state.authUser?.email) {
+      try {
+        const remote = await apiGet("/orders?email=" + encodeURIComponent(state.authUser.email));
+        if (Array.isArray(remote)) { state.orders = remote; saveOrders(); }
+      } catch {}
+    }
     navigateTo('confirmation');
   } catch (e) {
     console.error("placeOrder failed:", e);
-    showToast(`Failed to place order: ${e.message}`);
+    const msg = String(e.message || "Failed to place order");
+    toast(`❌ ${msg}`);
     if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
   }
 }

@@ -682,7 +682,12 @@ def get_districts(code):
 
 @app.route("/api/orders")
 def get_orders():
-    return jsonify(load_orders())
+    all_orders = load_orders()
+    email = (request.args.get("email") or "").strip().lower()
+    if not email:
+        return jsonify(all_orders)
+    filtered = [o for o in all_orders if (o.get("email") or "").lower() == email or (o.get("address", {}).get("email") or "").lower() == email]
+    return jsonify(filtered)
 
 @app.route("/api/orders/<path:oid>")
 def get_order(oid):
@@ -734,9 +739,12 @@ def create_order():
         if qty<=0: return jsonify({"error": f"Invalid quantity for product {pid}"}),400
         enriched.append({"id":prod["id"],"name":prod["name"],"price":prod["price"],"quantity":qty,"image":prod["image"]})
     subtotal,discount,shipping,total = calculate_total(enriched)
+    sess = _get_session(request)
     order = {
         "id": generate_order_id(),
         "date": datetime.now(timezone.utc).isoformat(),
+        "email": sess.get("email") if sess else None,
+        "userName": sess.get("name") if sess else None,
         "items": enriched,
         "subtotal": subtotal,
         "discount": discount,

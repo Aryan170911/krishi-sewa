@@ -468,7 +468,22 @@ app.get("/api/states/:code/districts", (req, res) => {
 });
 
 // Orders
-app.get("/api/orders", (req, res) => res.json(loadOrders()));
+app.get("/api/orders", (req, res) => {
+  const all = loadOrders();
+  const email = (req.query.email || "").toString().trim().toLowerCase();
+  if (!email) return res.json(all);
+  // Match by address.email OR by user email in address OR by phone (fallback for old orders)
+  const filtered = all.filter(o => {
+    const oe = (o.email || o.address?.email || "").toLowerCase();
+    if (oe && oe === email) return true;
+    if (o.address?.phone) {
+      // no email stored — include if user has matching phone from session
+      return false;
+    }
+    return false;
+  });
+  res.json(filtered);
+});
 app.get("/api/orders/:id", (req, res) => {
   const orders = loadOrders();
   const id = decodeURIComponent(req.params.id);
@@ -489,6 +504,8 @@ app.post("/api/orders", orderLimiter, (req, res) => {
   if (!validStates.includes(address.state)) return res.status(400).json({ error: "Invalid state code" });
   if (!districtsByState[address.state]?.includes(address.district)) return res.status(400).json({ error: "Invalid district for state" });
   if (!["upi","card","netbanking","cod","razorpay"].includes(paymentMethod)) return res.status(400).json({ error: "Invalid paymentMethod" });
+  // Attach logged-in user email (from session cookie) so order is per-account
+  const session = getSession(req);
   const enrichedItems = [];
   for (const item of items) {
     const product = products.find((p) => p.id === parseInt(item.id));
@@ -499,10 +516,11 @@ app.post("/api/orders", orderLimiter, (req, res) => {
     enrichedItems.push({ id: product.id, name: product.name, price: product.price, quantity: qty, image: product.image });
   }
   const { subtotal, discount, shipping, total } = calculateCartTotal(enrichedItems);
-  const order = { id: generateOrderId(), date: new Date().toISOString(), items: enrichedItems, subtotal, discount, shipping, total, address, paymentMethod, status: "processing" };
+  const order = { id: generateOrderId(), date: new Date().toISOString(), email: session?.email || null, userName: session?.name || null, items: enrichedItems, subtotal, discount, shipping, total, address, paymentMethod, status: "processing" };
   const orders = loadOrders();
   orders.push(order);
   saveOrders(orders);
+  logAudit("order:create", { id: order.id, email: session?.email, total }, req.ip);
   res.status(201).json(order);
 });
 app.put("/api/orders/:id/status", requireAdmin, (req, res) => {

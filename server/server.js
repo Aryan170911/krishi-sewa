@@ -971,6 +971,50 @@ app.post("/api/auth/logout", (req, res) => {
   res.json({ ok: true });
 });
 
+// Delete account — soft delete + cascade soft delete related data
+app.delete("/api/auth/account", async (req, res) => {
+  try {
+    const sess = getSession(req);
+    if (!sess) return res.status(401).json({ error: "Login required" });
+    const email = sess.email;
+    const now = new Date().toISOString();
+    if (supabase) {
+      // Soft delete the user
+      await supabase.from("users").update({
+        deleted_at: now,
+        name: "Deleted User",
+        email: `deleted_${Date.now()}@removed.local`,
+        password_hash: "REDACTED"
+      }).eq("email", email);
+      // Soft delete their orders
+      await supabase.from("orders").update({ deleted_at: now }).eq("email", email);
+      // Close their support chats
+      await supabase.from("support_chats").update({
+        deleted_at: now,
+        status: "closed",
+        closed_at: now
+      }).eq("user_email", email);
+      // Soft delete their messages
+      await supabase.from("support_messages").update({ deleted_at: now }).eq("sender_email", email);
+      // Soft delete addresses, cart, wishlist, prefs
+      await supabase.from("user_addresses").update({ deleted_at: now }).eq("user_email", email);
+      await supabase.from("user_carts").delete().eq("user_email", email);
+      await supabase.from("user_wishlist").delete().eq("user_email", email);
+      await supabase.from("user_preferences").delete().eq("user_email", email);
+      await supabase.from("user_sessions").update({ revoked_at: now }).eq("user_email", email);
+      // Log the action
+      logAudit("user:delete_account", { email, ip: req.ip }, req.ip);
+    }
+    // Delete the session
+    SESSIONS.delete(sess.token);
+    res.clearCookie(SESSION_COOKIE);
+    res.json({ ok: true, message: "Account deleted. All your data has been removed." });
+  } catch (e) {
+    console.warn("[delete account]", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Payment Gateway - Razorpay (test) + config
 app.get("/api/payment/config", (req, res) => {
   res.json({

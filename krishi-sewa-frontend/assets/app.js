@@ -652,23 +652,59 @@ function renderMobileBottomNav() {
 function renderFooter() {
   return `
     <footer class="bg-secondary-container w-full mt-auto">
-      <div class="w-full py-section-gap px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto grid grid-cols-1 md:grid-cols-2 gap-stack-lg border-t border-outline-variant/20">
+      <div class="w-full py-section-gap px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto grid grid-cols-1 md:grid-cols-3 gap-stack-lg border-t border-outline-variant/20">
         <div class="flex flex-col gap-stack-sm">
           <span class="text-headline-sm font-headline-sm text-primary">Krishi Sewa Foundation</span>
           <p class="text-body-sm font-body-sm text-on-secondary-container max-w-md">
             © 2026 Krishi Sewa Foundation. Preserving heritage, nurturing growth.
           </p>
         </div>
-        <div class="flex flex-wrap md:justify-end gap-x-gutter gap-y-stack-sm text-label-sm font-label-sm">
-          <a class="text-on-secondary-container hover:underline decoration-primary transition-all focus:outline-none focus:ring-2 focus:ring-primary rounded" href="#about" onclick="navigateTo('about')">Our Mission</a>
-          <a class="text-on-secondary-container hover:underline decoration-primary transition-all focus:outline-none focus:ring-2 focus:ring-primary rounded" href="#home" onclick="navigateTo('home'); scrollToEvents()">Farmer Stories</a>
-          <a class="text-on-secondary-container hover:underline decoration-primary transition-all focus:outline-none focus:ring-2 focus:ring-primary rounded" href="#">Privacy Policy</a>
-          <a class="text-on-secondary-container hover:underline decoration-primary transition-all focus:outline-none focus:ring-2 focus:ring-primary rounded" href="#">Terms of Service</a>
-          <a class="text-on-secondary-container hover:underline decoration-primary transition-all focus:outline-none focus:ring-2 focus:ring-primary rounded" href="#about" onclick="navigateTo('about')">Contact Us</a>
+        <div class="flex flex-col gap-2">
+          <h3 class="font-label-md text-label-md text-primary">Get harvest updates</h3>
+          <form onsubmit="event.preventDefault(); handleNewsletter(this);" class="flex gap-2 max-w-sm">
+            <label class="sr-only" for="newsletter-email">Email address</label>
+            <input id="newsletter-email" type="email" required placeholder="your@email.com" class="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface border border-outline-variant text-sm focus:border-primary focus:outline-none" autocomplete="email">
+            <button type="submit" class="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-semibold hover:bg-primary-container transition-colors min-h-[40px]">Subscribe</button>
+          </form>
+          <p class="text-xs text-on-secondary-container/70">Monthly tips, seed availability, event invites.</p>
+        </div>
+        <div class="flex flex-col md:items-end gap-stack-sm">
+          <div class="flex flex-wrap md:justify-end gap-x-gutter gap-y-stack-sm text-label-sm font-label-sm">
+            <a class="text-on-secondary-container hover:underline decoration-primary transition-all focus:outline-none focus:ring-2 focus:ring-primary rounded min-h-[32px] flex items-center" href="#about" onclick="navigateTo('about')">Our Mission</a>
+            <a class="text-on-secondary-container hover:underline decoration-primary transition-all focus:outline-none focus:ring-2 focus:ring-primary rounded min-h-[32px] flex items-center" href="#home" onclick="navigateTo('home'); scrollToEvents()">Events</a>
+            <a class="text-on-secondary-container hover:underline decoration-primary transition-all focus:outline-none focus:ring-2 focus:ring-primary rounded min-h-[32px] flex items-center" href="#about" onclick="navigateTo('about')">Contact</a>
+            <a class="text-on-secondary-container hover:underline decoration-primary transition-all focus:outline-none focus:ring-2 focus:ring-primary rounded min-h-[32px] flex items-center" href="#home" onclick="navigateTo('home')">FAQ</a>
+          </div>
+          <div class="flex gap-2 md:justify-end">
+            <a href="https://wa.me/919999999999" class="h-9 w-9 rounded-full bg-primary text-on-primary flex items-center justify-center hover:scale-110 transition-transform" aria-label="WhatsApp">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.498 14.382c-.301-.15-1.767-.867-2.04-.966-.273-.101-.473-.15-.673.15-.197.295-.771.964-.944 1.162-.175.195-.349.21-.646.075-.3-.15-1.263-.465-2.403-1.485-.888-.795-1.484-1.77-1.66-2.07-.174-.3-.019-.465.13-.615.136-.135.301-.345.451-.523.146-.181.194-.301.297-.496.1-.21.049-.375-.025-.524-.075-.15-.672-1.62-.922-2.206-.24-.584-.487-.51-.672-.51-.172-.015-.371-.015-.571-.015-.2 0-.523.074-.797.359-.273.3-1.045 1.02-1.045 2.475s1.07 2.865 1.219 3.075c.149.195 2.105 3.195 5.1 4.485.714.3 1.27.48 1.704.629.714.227 1.365.195 1.88.121.574-.091 1.767-.721 2.016-1.426.255-.705.255-1.29.18-1.425-.074-.135-.27-.21-.57-.345m-5.446 7.443h-.016c-1.77 0-3.524-.48-5.055-1.38l-.36-.214-3.75.975 1.005-3.645-.239-.375a9.869 9.869 0 0 1-1.516-5.26c0-5.445 4.455-9.885 9.942-9.885 2.654 0 5.145 1.035 7.021 2.91 1.875 1.875 2.909 4.366 2.909 7.021-.004 5.444-4.46 9.885-9.935 9.885M20.52 3.449C18.24 1.245 15.24 0 12.045 0 5.463 0 .104 5.334.101 11.893c0 2.096.549 4.14 1.595 5.945L0 24l6.335-1.652a12.062 12.062 0 0 0 5.71 1.447h.006c6.585 0 11.946-5.336 11.949-11.896 0-3.176-1.24-6.165-3.495-8.411"/></svg>
+            </a>
+            <a href="https://instagram.com" class="h-9 w-9 rounded-full bg-primary text-on-primary flex items-center justify-center hover:scale-110 transition-transform" aria-label="Instagram">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>
+            </a>
+            <a href="https://facebook.com" class="h-9 w-9 rounded-full bg-primary text-on-primary flex items-center justify-center hover:scale-110 transition-transform" aria-label="Facebook">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+            </a>
+          </div>
         </div>
       </div>
     </footer>
   `;
+}
+
+function handleNewsletter(form) {
+  const email = form.querySelector("input[type=email]").value.trim();
+  if (!email) return;
+  // In a real app this would call an API. For now, save to localStorage as a subscriber.
+  try {
+    const subs = JSON.parse(localStorage.getItem("krishi_newsletter") || "[]");
+    if (!subs.includes(email)) subs.push(email);
+    localStorage.setItem("krishi_newsletter", JSON.stringify(subs));
+    toast("Thanks! We'll send you harvest updates 🌾", "success");
+    form.reset();
+  } catch {
+    toast("Subscription failed", "error");
+  }
 }
 
 function renderProductCard(product, compact = false) {
@@ -2183,10 +2219,29 @@ async function handleResetPassword(e){
 }
 async function handleLogout(){
   try { await apiPost("/auth/logout", {}); } catch {}
-  state.authUser=null;
-  localStorage.removeItem("krishi_user");
-  toast("Logged out");
+  // Clear ALL local data on logout to prevent data leaks between users
+  state.authUser = null;
+  state.authMode = "login";
+  state.authPendingEmail = "";
+  state.authPendingPurpose = "";
+  state.cart = [];
+  state.orders = [];
+  state.lastOrder = null;
+  state.billingAddress = {};
+  state.searchQuery = "";
+  state.wishlistCount = 0;
+  state.checkoutStep = 1;
+  state.isMobileMenuOpen = false;
+  state.isCartSidebarOpen = false;
+  try {
+    localStorage.removeItem("krishi_user");
+    localStorage.removeItem("krishi_sewa_cart");
+    localStorage.removeItem("krishi_sewa_orders");
+  } catch {}
+  toast("Logged out — all local data cleared");
   navigateTo("auth");
+  // Force a re-render
+  setTimeout(() => renderApp(), 50);
 }
 
 // ============================================
@@ -2865,6 +2920,7 @@ function renderProfilePage() {
           <button data-profile-tab="wishlist" class="profile-tab px-4 py-2 text-sm font-semibold text-on-surface-variant border-b-2 border-transparent">Wishlist</button>
           <button data-profile-tab="sessions" class="profile-tab px-4 py-2 text-sm font-semibold text-on-surface-variant border-b-2 border-transparent">Active Sessions</button>
           <button data-profile-tab="preferences" class="profile-tab px-4 py-2 text-sm font-semibold text-on-surface-variant border-b-2 border-transparent">Preferences</button>
+          <button data-profile-tab="danger" class="profile-tab px-4 py-2 text-sm font-semibold text-on-surface-variant border-b-2 border-transparent">Danger Zone</button>
         </div>
         <div id="profileTabContent">
           <div class="text-sm text-on-surface-variant py-4">Loading…</div>
@@ -3042,7 +3098,7 @@ function renderSupportWidget() {
   if (hide) return "";
   return `
     <!-- Floating help ball -->
-    <button id="supportBall" onclick="toggleSupportWidget()" class="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-[90] h-14 w-14 rounded-full bg-primary text-on-primary shadow-2xl flex items-center justify-center hover:scale-110 transition-transform ${supportState.open ? "scale-0" : "scale-100"}" aria-label="Get help" title="Get help">
+    <button id="supportBall" onclick="toggleSupportWidget()" class="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-[85] h-14 w-14 rounded-full bg-primary text-on-primary shadow-2xl flex items-center justify-center hover:scale-110 transition-transform ${supportState.open ? "scale-0" : "scale-100"}" aria-label="Get help" title="Get help">
       <span class="material-symbols-outlined text-2xl">support_agent</span>
       <span class="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-accent-ochre animate-ping"></span>
       <span class="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-accent-ochre"></span>
@@ -3289,7 +3345,7 @@ function autoGrowSupportInput(el) {
 // BACK TO TOP button
 // ============================================
 function renderBackToTop() {
-  return `<button id="backToTopBtn" class="hidden fixed bottom-32 md:bottom-24 right-4 md:right-6 z-[80] h-12 w-12 rounded-full bg-primary text-on-primary shadow-2xl hover:scale-110 transition-transform flex items-center justify-center" aria-label="Back to top" onclick="window.scrollTo({top:0,behavior:'smooth'})">
+  return `<button id="backToTopBtn" class="hidden fixed bottom-36 md:bottom-24 left-4 md:left-6 z-[80] h-12 w-12 rounded-full bg-surface text-primary border border-outline-variant shadow-lg hover:scale-110 transition-transform flex items-center justify-center" aria-label="Back to top" onclick="window.scrollTo({top:0,behavior:'smooth'})">
     <span class="material-symbols-outlined" aria-hidden="true">arrow_upward</span>
   </button>`;
 }
@@ -3560,6 +3616,7 @@ async function loadProfileTab(tab) {
     if (tab === "wishlist") return await loadWishlistTab(content);
     if (tab === "sessions") return await loadSessionsTab(content);
     if (tab === "preferences") return await loadPreferencesTab(content);
+    if (tab === "danger") return await loadDangerTab(content);
   } catch (e) {
     content.innerHTML = `<div class="text-error text-sm">${escapeHtml(e.message)}</div>`;
   }
@@ -3666,6 +3723,67 @@ async function loadSessionsTab(content) {
       </div>
     `}
   `;
+}
+
+async function loadDangerTab(content) {
+  content.innerHTML = `
+    <h3 class="font-bold text-error mb-3 flex items-center gap-2"><span class="material-symbols-outlined">warning</span> Danger Zone</h3>
+    <div class="bg-error-container/30 border-2 border-error rounded-xl p-5 space-y-4">
+      <div>
+        <p class="font-semibold text-on-error-container">Delete your account</p>
+        <p class="text-sm text-on-error-container/80 mt-1">This will permanently remove your profile, addresses, cart, wishlist, and anonymize your orders. Support chats will be closed. This action cannot be undone.</p>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-on-error-container mb-1">Type <code class="bg-error/20 px-1 rounded">DELETE</code> to confirm:</label>
+        <input id="deleteConfirm" placeholder="DELETE" class="w-full border border-error rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-error">
+      </div>
+      <button id="deleteAccountBtn" onclick="confirmDeleteAccount()" class="w-full bg-error text-on-error py-3 rounded-lg font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-error/90 transition-colors" disabled>Delete my account permanently</button>
+    </div>
+  `;
+  const input = document.getElementById("deleteConfirm");
+  if (input) {
+    input.addEventListener("input", () => {
+      const btn = document.getElementById("deleteAccountBtn");
+      if (btn) btn.disabled = input.value.trim() !== "DELETE";
+    });
+  }
+}
+
+async function confirmDeleteAccount() {
+  const input = document.getElementById("deleteConfirm");
+  if (!input || input.value.trim() !== "DELETE") {
+    toast('Type "DELETE" to confirm');
+    return;
+  }
+  if (!confirm("Are you absolutely sure? This action cannot be undone.")) return;
+  try {
+    const r = await fetch(`${API_BASE}/auth/account`, {
+      method: "DELETE",
+      credentials: "include"
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Delete failed");
+    toast("Account deleted");
+    // Clear all local data
+    state.authUser = null;
+    state.authMode = "login";
+    state.authPendingEmail = "";
+    state.authPendingPurpose = "";
+    state.cart = [];
+    state.orders = [];
+    state.lastOrder = null;
+    state.billingAddress = {};
+    state.wishlistCount = 0;
+    try {
+      localStorage.removeItem("krishi_user");
+      localStorage.removeItem("krishi_sewa_cart");
+      localStorage.removeItem("krishi_sewa_orders");
+    } catch {}
+    navigateTo("home");
+    setTimeout(() => renderApp(), 100);
+  } catch (e) {
+    toast("Delete failed: " + e.message);
+  }
 }
 
 async function loadPreferencesTab(content) {

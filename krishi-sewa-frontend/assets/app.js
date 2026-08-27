@@ -1,42 +1,25 @@
 /**
- * Krishi Sewa Foundation - Frontend + Backend + Supabase Auth OTP
- * Now integrated with Express/Python API + Supabase (signup/OTP/reset)
+ * Krishi Sewa Foundation - Frontend + Backend + Email OTP (Resend)
+ * OTP flow: enter email -> server sends 6-digit code -> verify -> session cookie
  */
-let supabaseClient = null;
-let supabaseConfigError = null;
-async function initSupabase() {
+let authConfig = null;
+let authConfigError = null;
+async function initAuth() {
   try {
     const cfg = await apiGet("/config");
     if (!cfg) {
-      supabaseConfigError = "Could not reach backend /api/config (network or CORS)";
-      console.warn("[Supabase]", supabaseConfigError);
-    } else if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
-      supabaseConfigError = "Backend returned empty supabaseUrl/anonKey — set env vars SUPABASE_URL + SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) and restart server";
-      console.warn("[Supabase]", supabaseConfigError, cfg);
-    } else if (!window.supabase) {
-      supabaseConfigError = "supabase-js library not loaded (CDN blocked?)";
-      console.warn("[Supabase]", supabaseConfigError);
+      authConfigError = "Could not reach backend /api/config (network or CORS)";
     } else {
-      supabaseClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
-      console.log("✅ Supabase Auth ready →", cfg.supabaseUrl);
-      // listen auth changes
-      supabaseClient.auth.onAuthStateChange((event, session) => {
-        if (session?.user) {
-          state.authUser = session.user;
-          localStorage.setItem("krishi_user", JSON.stringify(session.user));
-        } else {
-          state.authUser = null;
-          localStorage.removeItem("krishi_user");
-        }
-        renderApp();
-      });
-      const { data } = await supabaseClient.auth.getSession();
-      if (data?.session?.user) {
-        state.authUser = data.session.user;
-        localStorage.setItem("krishi_user", JSON.stringify(data.session.user));
-      }
+      authConfig = cfg;
+      console.log(cfg.emailEnabled ? "[Auth] Email OTP ready" : "[Auth] OTP not configured on server (RESEND_API_KEY missing)");
+      // check existing session
+      try {
+        const me = await apiPost("/auth/me", {}, true);
+        if (me?.user) { state.authUser = me.user; localStorage.setItem("krishi_user", JSON.stringify(me.user)); }
+        else { state.authUser = null; localStorage.removeItem("krishi_user"); }
+      } catch {}
     }
-  } catch (e) { supabaseConfigError = String(e?.message || e); console.warn("Supabase init failed:", e); }
+  } catch (e) { authConfigError = String(e?.message || e); console.warn("Auth init failed:", e); }
 }
 
 function getApiBase() {
@@ -63,7 +46,7 @@ async function apiGet(path) {
   if (API_BASE.includes(":3000")) bases.push(API_BASE.replace(":3000", ":3001"));
   for (const base of bases) {
     try {
-      const res = await fetch(`${base}${path}`);
+      const res = await fetch(`${base}${path}`, { credentials: "include" });
       if (!res.ok) throw new Error(`API ${res.status}`);
       // Update API_BASE to working base for future calls
       if (base !== API_BASE) {
@@ -79,15 +62,17 @@ async function apiGet(path) {
   console.warn(`API GET ${path} failed on all bases, using mock fallback`);
   return null;
 }
-async function apiPost(path, body) {
+async function apiPost(path, body, silent = false) {
   const effectiveBase = window.__krishi_api_base || API_BASE;
   const res = await fetch(`${effectiveBase}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(body)
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
+    if (silent) return { error: err.error || `API ${res.status}` };
     throw new Error(err.error || `API ${res.status}`);
   }
   return res.json();
@@ -387,7 +372,9 @@ const state = {
   isCartSidebarOpen: false,
   priceRange: "all",
   authUser: JSON.parse(localStorage.getItem("krishi_user") || "null"),
-  authMode: "login" // login | signup | otp | reset
+  authMode: "login", // login | signup | otp | reset
+  authPendingEmail: "",
+  authPendingName: ""
 };
 
 // ============================================
@@ -1838,110 +1825,120 @@ function renderAuthPage() {
   <main class="flex-grow w-full max-w-md mx-auto px-4 py-8">
     <div class="bg-white border border-outline-variant rounded-2xl p-6">
       <h1 class="text-2xl font-bold text-primary text-center">Account</h1>
-      <p class="text-center text-on-surface-variant text-sm mb-6">Signup & Reset via <b>Supabase Email OTP</b></p>
+      <p class="text-center text-on-surface-variant text-sm mb-6">Secure login with <b>6-digit email code</b></p>
       <div class="flex gap-2 mb-6">
         ${["login","signup","otp","reset"].map(m=>`
-          <button onclick="state.authMode='${m}'; renderApp()" class="flex-1 py-2 rounded-lg text-sm font-bold ${mode===m?'bg-primary text-on-primary':'bg-surface-variant text-on-surface-variant'}">${m.toUpperCase()}</button>
+          <button onclick="state.authMode='${m}'; state.authPendingEmail=''; renderApp()" class="flex-1 py-2 rounded-lg text-sm font-bold ${mode===m?'bg-primary text-on-primary':'bg-surface-variant text-on-surface-variant'}">${m.toUpperCase()}</button>
         `).join("")}
       </div>
       ${mode==="login" ? `
         <form onsubmit="handleLogin(event)" class="space-y-3">
-          <input id="authEmail" type="email" required placeholder="Email" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <input id="authPass" type="password" required placeholder="Password" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Login</button>
-          <p id="authMsg" class="text-center text-sm text-error"></p>
+          <input id="authEmail" type="email" required placeholder="Your email" value="${state.authPendingEmail||''}" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Send Login Code</button>
+          <p id="authMsg" class="text-center text-sm"></p>
         </form>
       ` : mode==="signup" ? `
         <form onsubmit="handleSignup(event)" class="space-y-3">
-          <input id="authName" placeholder="Full Name" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <input id="authEmail" type="email" required placeholder="Email" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <input id="authPass" type="password" required placeholder="Password (min 6)" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Signup — Send OTP to Email</button>
-          <p id="authMsg" class="text-center text-sm text-on-surface-variant">Supabase will email OTP / confirmation link</p>
-        </form>
-      ` : mode==="otp" ? `
-        <form onsubmit="handleOtpSend(event)" class="space-y-3">
-          <input id="authEmail" type="email" required placeholder="Email for OTP" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Send OTP</button>
-          <div class="flex gap-2">
-            <input id="authOtp" placeholder="Enter 6-digit OTP" class="flex-1 border border-outline-variant rounded-lg px-3 py-3">
-            <button type="button" onclick="handleOtpVerify()" class="bg-secondary-container px-4 rounded-lg font-bold">Verify</button>
-          </div>
+          <input id="authName" placeholder="Full name" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <input id="authEmail" type="email" required placeholder="Your email" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Create Account — Send Code</button>
           <p id="authMsg" class="text-center text-sm"></p>
         </form>
+      ` : mode==="otp" ? `
+        <div class="space-y-3">
+          <input id="authEmail" type="email" required placeholder="Your email" value="${state.authPendingEmail||''}" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <button onclick="(async()=>{const e=document.getElementById('authEmail').value.trim(); if(e){await apiPost('/auth/send-otp',{email:e});toast('OTP sent to '+e);}})()" class="w-full border border-outline-variant py-2.5 rounded-lg font-semibold">Resend Code</button>
+          <input id="authCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="Enter 6-digit code" class="w-full text-center text-2xl tracking-[0.5em] font-bold border-2 border-primary rounded-lg px-3 py-4">
+          <button type="button" onclick="handleOtpVerify()" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Verify & Login</button>
+          <p id="authMsg" class="text-center text-sm"></p>
+        </div>
       `       : `
         <form onsubmit="handleResetSend(event)" class="space-y-3">
-          <input id="authEmail" type="email" required placeholder="Email to reset" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <button type="submit" class="w-full bg-accent-ochre text-white py-3 rounded-lg font-bold">Send Reset Link (OTP)</button>
-          <p id="authMsg" class="text-center text-sm text-on-surface-variant">Check email for reset link</p>
+          <input id="authEmail" type="email" required placeholder="Your email" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <button type="submit" class="w-full bg-accent-ochre text-white py-3 rounded-lg font-bold">Send Reset Code</button>
+          <p id="authMsg" class="text-center text-sm text-on-surface-variant">We'll email a 6-digit code — verify to continue</p>
         </form>
       `}
-      ${supabaseConfigError ? `
+      ${authConfigError ? `
         <div class="mt-4 p-3 bg-error-container text-on-error-container rounded-lg text-xs">
-          <b>Config issue:</b> ${supabaseConfigError}
-          <button onclick="(async()=>{supabaseConfigError=null;await initSupabase();renderApp();})()" class="ml-2 underline font-bold">Retry</button>
-        </div>` : !supabaseClient ? `
+          <b>Config issue:</b> ${authConfigError}
+          <button onclick="(async()=>{authConfigError=null;await initAuth();renderApp();})()" class="ml-2 underline font-bold">Retry</button>
+        </div>` : (authConfig && !authConfig.emailEnabled) ? `
         <div class="mt-4 p-3 bg-error-container text-on-error-container rounded-lg text-xs">
-          Supabase Auth not initialized. Check browser console for details.
-          <button onclick="(async()=>{await initSupabase();renderApp();})()" class="ml-2 underline font-bold">Retry</button>
+          <b>Email not configured on server.</b> Set <code>RESEND_API_KEY</code> env var on Render and redeploy.
         </div>` : ""}
-      <p class="text-center text-xs text-on-surface-variant mt-4">Supabase Auth • OTP via email • Secure • No password stored locally</p>
+      <p class="text-center text-xs text-on-surface-variant mt-4">Email OTP via Resend • 6-digit code • Session cookie • No password stored</p>
     </div>
   </main>`;
 }
 async function handleSignup(e){
   e.preventDefault();
   const email=document.getElementById("authEmail").value.trim();
-  const password=document.getElementById("authPass").value;
   const name=document.getElementById("authName")?.value || "";
   const msg=document.getElementById("authMsg");
-  if(!supabaseClient){ msg.textContent="Supabase not ready — check /api/config"; msg.className="text-center text-sm text-error"; return; }
-  msg.textContent="Sending OTP..."; 
-  const { error } = await supabaseClient.auth.signUp({ email, password, options:{ data:{ full_name:name }, emailRedirectTo: window.location.origin + "/#auth" }});
-  if(error){ msg.textContent=error.message; msg.className="text-center text-sm text-error"; }
-  else { msg.textContent="✅ Check email for OTP / confirmation link! Then use OTP tab to verify."; msg.className="text-center text-sm text-green-700"; toast("Signup OTP sent to "+email); }
+  msg.textContent="Sending OTP to "+email+"..."; msg.className="text-center text-sm text-on-surface-variant";
+  try {
+    const r = await apiPost("/auth/send-otp", { email, name });
+    if (r.error) { msg.textContent = r.error; msg.className="text-center text-sm text-error"; return; }
+    state.authMode = "otp"; state.authPendingEmail = email; state.authPendingName = name; renderApp();
+    toast("OTP sent to "+email);
+  } catch (e) { msg.textContent=e.message; msg.className="text-center text-sm text-error"; }
 }
 async function handleLogin(e){
   e.preventDefault();
   const email=document.getElementById("authEmail").value.trim();
-  const password=document.getElementById("authPass").value;
   const msg=document.getElementById("authMsg");
-  if(!supabaseClient){ msg.textContent="Supabase not ready"; return; }
-  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-  if(error){ msg.textContent=error.message; msg.className="text-center text-sm text-error"; }
-  else { msg.textContent="✅ Logged in"; toast("Welcome "+email); navigateTo("shop"); }
+  msg.textContent="Sending OTP..."; msg.className="text-center text-sm text-on-surface-variant";
+  try {
+    const r = await apiPost("/auth/send-otp", { email });
+    if (r.error) { msg.textContent = r.error; msg.className="text-center text-sm text-error"; return; }
+    state.authMode = "otp"; state.authPendingEmail = email; renderApp();
+    toast("OTP sent to "+email);
+  } catch (e) { msg.textContent=e.message; msg.className="text-center text-sm text-error"; }
 }
 async function handleOtpSend(e){
   e.preventDefault();
   const email=document.getElementById("authEmail").value.trim();
   const msg=document.getElementById("authMsg");
-  if(!supabaseClient){ msg.textContent="Supabase not ready"; return; }
-  msg.textContent="Sending OTP...";
-  const { error } = await supabaseClient.auth.signInWithOtp({ email, options:{ shouldCreateUser:true }});
-  if(error){ msg.textContent=error.message; msg.className="text-center text-sm text-error"; }
-  else { msg.textContent="✅ OTP sent to "+email+" — check email!"; msg.className="text-center text-sm text-green-700"; toast("OTP sent"); }
+  msg.textContent="Sending OTP..."; msg.className="text-center text-sm text-on-surface-variant";
+  try {
+    const r = await apiPost("/auth/send-otp", { email });
+    if (r.error) { msg.textContent = r.error; msg.className="text-center text-sm text-error"; return; }
+    state.authPendingEmail = email; msg.textContent="✅ OTP sent to "+email+" — check your email!"; msg.className="text-center text-sm text-green-700";
+    toast("OTP sent");
+  } catch (e) { msg.textContent=e.message; msg.className="text-center text-sm text-error"; }
 }
 async function handleOtpVerify(){
-  const email=document.getElementById("authEmail").value.trim();
-  const token=document.getElementById("authOtp").value.trim();
+  const email=document.getElementById("authEmail")?.value?.trim() || state.authPendingEmail;
+  const code=document.getElementById("authOtp")?.value?.trim() || document.getElementById("authCode")?.value?.trim();
   const msg=document.getElementById("authMsg");
-  if(!email||!token){ msg.textContent="Enter email and OTP"; return; }
-  if(!supabaseClient){ msg.textContent="Supabase not ready"; return; }
-  const { error } = await supabaseClient.auth.verifyOtp({ email, token, type:"email" });
-  if(error){ msg.textContent=error.message; msg.className="text-center text-sm text-error"; }
-  else { msg.textContent="✅ Verified! Logged in"; toast("OTP verified"); navigateTo("shop"); }
+  if(!email||!code){ msg.textContent="Enter email and 6-digit code"; return; }
+  msg.textContent="Verifying..."; msg.className="text-center text-sm text-on-surface-variant";
+  try {
+    const r = await apiPost("/auth/verify-otp", { email, code });
+    if (r.error) { msg.textContent = r.error; msg.className="text-center text-sm text-error"; return; }
+    state.authUser = r.user;
+    localStorage.setItem("krishi_user", JSON.stringify(r.user));
+    msg.textContent="✅ Verified! Welcome "+r.user.name; msg.className="text-center text-sm text-green-700";
+    toast("Welcome "+r.user.name);
+    setTimeout(()=>navigateTo("shop"), 600);
+  } catch (e) { msg.textContent=e.message; msg.className="text-center text-sm text-error"; }
 }
 async function handleResetSend(e){
   e.preventDefault();
   const email=document.getElementById("authEmail").value.trim();
   const msg=document.getElementById("authMsg");
-  if(!supabaseClient){ msg.textContent="Supabase not ready"; return; }
-  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + "/#auth" });
-  if(error){ msg.textContent=error.message; }
-  else { msg.textContent="✅ Reset link sent to "+email; msg.className="text-center text-sm text-green-700"; toast("Reset email sent"); }
+  msg.textContent="Sending OTP..."; msg.className="text-center text-sm text-on-surface-variant";
+  try {
+    const r = await apiPost("/auth/send-otp", { email });
+    if (r.error) { msg.textContent = r.error; msg.className="text-center text-sm text-error"; return; }
+    state.authMode = "otp"; state.authPendingEmail = email; renderApp();
+    msg.textContent="✅ OTP sent — verify to continue"; msg.className="text-center text-sm text-green-700";
+    toast("OTP sent");
+  } catch (e) { msg.textContent=e.message; msg.className="text-center text-sm text-error"; }
 }
 async function handleLogout(){
-  if(supabaseClient) await supabaseClient.auth.signOut();
+  try { await apiPost("/auth/logout", {}); } catch {}
   state.authUser=null;
   localStorage.removeItem("krishi_user");
   toast("Logged out");
@@ -2401,8 +2398,8 @@ async function init() {
   // Initial render (with mock fallback immediately)
   handleHashChange();
 
-  // Init Supabase Auth + backend sync
-  await initSupabase();
+  // Init Auth + backend sync
+  await initAuth();
   await syncFromBackend();
   // Re-render to show backend data
   renderApp();

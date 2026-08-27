@@ -10,7 +10,7 @@ import fs from "fs";
 import { products as seedProducts, categories, events, indianStates, districtsByState } from "./data.js";
 import Razorpay from "razorpay";
 import crypto from "crypto";
-import { createClient } from "@supabase/supabase-js";
+import { Resend } from "resend";
 
 dotenv.config();
 
@@ -23,21 +23,12 @@ const ORDERS_FILE = path.join(__dirname, "data", "orders.json");
 const PRODUCTS_FILE = path.join(__dirname, "data", "products.json");
 const IS_PROD = process.env.NODE_ENV === "production";
 
-// Supabase (public anon key is safe to ship; service role stays env-only)
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "https://xypizzylruvgcglhyiyb.supabase.co";
-const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "sb_publishable_h4JTK-FhACGp3JDCvHMHPg_R50Q7G2PIq9wBpkMn_50Q";
-const SUPABASE_SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-// Use service role server-side if set, else anon (anon is enough for Auth + read, RLS enforced)
-const SUPABASE_KEY = SUPABASE_SERVICE || SUPABASE_ANON;
-let supabase = null;
-if (SUPABASE_URL && SUPABASE_KEY) {
-  try {
-    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-    console.log(`[Supabase] Connected to ${SUPABASE_URL} as ${SUPABASE_SERVICE ? "service" : "anon"}`);
-  } catch (e) { console.warn("[Supabase] init failed, falling back to JSON:", e.message); }
-} else {
-  console.log("[Supabase] Not configured — using JSON files (data/*.json)");
-}
+// Email — Resend (HTTP, no SMTP, works on Render/StackHost/anywhere)
+const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
+const EMAIL_FROM = process.env.EMAIL_FROM || "Krishi Sewa <onboarding@resend.dev>";
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
+if (resend) console.log("[Email] Resend ready (from: " + EMAIL_FROM + ")");
+else console.log("[Email] Resend NOT configured — set RESEND_API_KEY env (or paste in next deploy)");
 
 // Razorpay (test keys - replace via .env for prod)
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || "rzp_test_Sv4HWH1qFfP22s";
@@ -233,10 +224,100 @@ app.get("/api/admin/audit", requireAdmin, (req, res) => {
 });
 app.get("/api/config", (req, res) => {
   res.json({
-    supabaseUrl: SUPABASE_URL,
-    supabaseAnonKey: SUPABASE_ANON,
+    emailEnabled: !!resend,
+    emailFrom: EMAIL_FROM,
     razorpayKeyId: RAZORPAY_KEY_ID
   });
+});
+
+// ============================================
+// EMAIL OTP — Resend (no Supabase, no SMTP, works on Render)
+// ============================================
+const otpStore = new Map(); // email -> { code, expiresAt, attempts }
+const AUTH_FILE = path.join(__dirname, "data", "auth.json");
+const SESSIONS = new Map(); // token -> { email, createdAt }
+const SESSION_COOKIE = "krishi_session";
+const OTP_TTL_MS = 10 * 60 * 1000;
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+function newCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
+function newToken() { return crypto.randomBytes(24).toString("hex"); }
+function loadAuth() {
+  try { return JSON.parse(fs.readFileSync(AUTH_FILE, "utf8")); } catch { return { users: {} }; }
+}
+function saveAuth(a) { try { fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true }); fs.writeFileSync(AUTH_FILE, JSON.stringify(a, null, 2)); } catch (e) { console.warn("auth save failed", e.message); } }
+function getSession(req) {
+  const token = (req.headers.cookie || "").split(";").map(s=>s.trim()).find(s=>s.startsWith(SESSION_COOKIE+"="))?.split("=")[1];
+  if (!token) return null;
+  const s = SESSIONS.get(token);
+  if (!s) return null;
+  if (Date.now() - s.createdAt > SESSION_TTL_MS) { SESSIONS.delete(token); return null; }
+  return { token, ...s };
+}
+app.post("/api/auth/send-otp", loginLimiter, async (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const name = String(req.body?.name || "").trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Valid email required" });
+    if (!resend) return res.status(503).json({ error: "Email not configured on server (RESEND_API_KEY missing)" });
+    const code = newCode();
+    const expiresAt = Date.now() + OTP_TTL_MS;
+    otpStore.set(email, { code, expiresAt, attempts: 0, name });
+    console.log(`[OTP] ${email} -> ${code} (expires in 10min)`);
+    const { data, error } = await resend.emails.send({
+      from: EMAIL_FROM,
+      to: [email],
+      subject: `${code} is your Krishi Sewa verification code`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#f5f5f0;border-radius:12px">
+        <h2 style="color:#012d1d;margin:0 0 8px">Krishi Sewa Foundation</h2>
+        <p style="color:#333;margin:0 0 16px">${name ? `Hi ${name}, here` : `Here`}'s your verification code:</p>
+        <div style="background:#012d1d;color:#e8f5ed;font-size:36px;font-weight:bold;letter-spacing:8px;text-align:center;padding:20px;border-radius:8px">${code}</div>
+        <p style="color:#666;margin:16px 0 0;font-size:13px">This code expires in 10 minutes. If you didn't request it, ignore this email.</p>
+        <p style="color:#999;margin:24px 0 0;font-size:11px">Krishi Sewa Foundation — heritage seeds, pure spices, real impact.</p>
+      </div>`,
+      text: `Your Krishi Sewa code is ${code}. Expires in 10 min.`
+    });
+    if (error) {
+      console.error("[OTP] Resend error:", error);
+      return res.status(502).json({ error: "Failed to send email: " + (error.message || "unknown") });
+    }
+    res.json({ ok: true, message: "OTP sent to " + email, emailId: data?.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/api/auth/verify-otp", loginLimiter, (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const code = String(req.body?.code || "").trim();
+    if (!email || !code) return res.status(400).json({ error: "Email and code required" });
+    const rec = otpStore.get(email);
+    if (!rec) return res.status(400).json({ error: "No OTP requested for this email" });
+    if (Date.now() > rec.expiresAt) { otpStore.delete(email); return res.status(400).json({ error: "Code expired, request a new one" }); }
+    if (rec.attempts >= 5) { otpStore.delete(email); return res.status(429).json({ error: "Too many attempts, request a new code" }); }
+    if (rec.code !== code) { rec.attempts++; return res.status(400).json({ error: `Wrong code (${5-rec.attempts} attempts left)` }); }
+    // success — create user + session
+    const auth = loadAuth();
+    let user = auth.users[email];
+    if (!user) {
+      user = { email, name: rec.name || email.split("@")[0], createdAt: new Date().toISOString() };
+      auth.users[email] = user;
+      saveAuth(auth);
+    } else if (rec.name && rec.name !== user.name) { user.name = rec.name; auth.users[email] = user; saveAuth(auth); }
+    otpStore.delete(email);
+    const token = newToken();
+    SESSIONS.set(token, { email, name: user.name, createdAt: Date.now() });
+    res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", secure: IS_PROD, maxAge: SESSION_TTL_MS });
+    res.json({ ok: true, user: { email: user.email, name: user.name } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get("/api/auth/me", (req, res) => {
+  const s = getSession(req);
+  if (!s) return res.status(401).json({ user: null });
+  res.json({ user: { email: s.email, name: s.name } });
+});
+app.post("/api/auth/logout", (req, res) => {
+  const s = getSession(req);
+  if (s) SESSIONS.delete(s.token);
+  res.clearCookie(SESSION_COOKIE);
+  res.json({ ok: true });
 });
 
 // Payment Gateway - Razorpay (test) + config

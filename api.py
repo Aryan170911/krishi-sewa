@@ -12,6 +12,7 @@ import time
 import logging
 import hmac
 import hashlib
+import secrets
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify, send_from_directory, g
 from flask_cors import CORS
@@ -355,21 +356,20 @@ def save_orders(orders):
 
 products = load_products()
 
-# Supabase (public anon key is safe to ship; service role stays env-only)
-SUPABASE_URL = os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL") or "https://xypizzylruvgcglhyiyb.supabase.co"
-SUPABASE_ANON = os.environ.get("SUPABASE_ANON_KEY") or os.environ.get("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") or "sb_publishable_h4JTK-FhACGp3JDCvHMHPg_R50Q7G2PIq9wBpkMn_50Q"
-SUPABASE_SERVICE = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or ""
-SUPABASE_KEY = SUPABASE_SERVICE or SUPABASE_ANON
-supabase = None
-if SUPABASE_URL and SUPABASE_KEY:
+# Email — Resend (HTTP, no SMTP, works on Render/StackHost)
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "Krishi Sewa <onboarding@resend.dev>")
+resend_client = None
+if RESEND_API_KEY:
     try:
-        from supabase import create_client
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        print(f"[Supabase] Connected to {SUPABASE_URL} as {'service' if SUPABASE_SERVICE else 'anon'}", flush=True)
+        import resend
+        resend.api_key = RESEND_API_KEY
+        resend_client = resend
+        print(f"[Email] Resend ready (from: {EMAIL_FROM})", flush=True)
     except Exception as e:
-        print(f"[Supabase] init failed, using JSON: {e}", flush=True)
+        print(f"[Email] Resend init failed: {e}", flush=True)
 else:
-    print("[Supabase] Not configured - using JSON files", flush=True)
+    print("[Email] Resend NOT configured - set RESEND_API_KEY env", flush=True)
 
 # Razorpay config (test keys)
 RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "rzp_test_Sv4HWH1qFfP22s")
@@ -449,10 +449,113 @@ def admin_audit():
 @app.route("/api/config")
 def get_config():
     return jsonify({
-        "supabaseUrl": SUPABASE_URL,
-        "supabaseAnonKey": SUPABASE_ANON,
+        "emailEnabled": bool(resend_client),
+        "emailFrom": EMAIL_FROM,
         "razorpayKeyId": RAZORPAY_KEY_ID
     })
+
+# ============================================
+# EMAIL OTP — Resend (no Supabase, no SMTP, works on Render)
+# ============================================
+OTP_STORE = {}  # email -> {code, expires_at, attempts, name}
+AUTH_DB = {}     # email -> {email, name, created_at}
+SESSIONS = {}    # token -> {email, name, created_at}
+OTP_TTL = 600    # 10 min
+SESSION_TTL = 30 * 24 * 3600
+
+def _new_code(): return str(secrets.randbelow(900000) + 100000)
+def _new_token(): return secrets.token_hex(24)
+
+def _get_session(req):
+    cookie = (req.headers.get("Cookie") or "")
+    token = None
+    for part in cookie.split(";"):
+        part = part.strip()
+        if part.startswith("krishi_session="):
+            token = part.split("=", 1)[1]
+            break
+    if not token: return None
+    s = SESSIONS.get(token)
+    if not s: return None
+    if time.time() - s["created_at"] > SESSION_TTL:
+        SESSIONS.pop(token, None)
+        return None
+    return {"token": token, **s}
+
+@app.route("/api/auth/send-otp", methods=["POST"])
+def send_otp():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    name = (data.get("name") or "").strip()
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return jsonify({"error": "Valid email required"}), 400
+    if not resend_client:
+        return jsonify({"error": "Email not configured on server (RESEND_API_KEY missing)"}), 503
+    code = _new_code()
+    OTP_STORE[email] = {"code": code, "expires_at": time.time() + OTP_TTL, "attempts": 0, "name": name}
+    print(f"[OTP] {email} -> {code} (expires in 10min)", flush=True)
+    try:
+        resend_client.Emails.send({
+            "from": EMAIL_FROM,
+            "to": [email],
+            "subject": f"{code} is your Krishi Sewa verification code",
+            "html": f"""<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#f5f5f0;border-radius:12px">
+              <h2 style="color:#012d1d;margin:0 0 8px">Krishi Sewa Foundation</h2>
+              <p style="color:#333;margin:0 0 16px">{f'Hi {name}, here' if name else 'Here'}'s your verification code:</p>
+              <div style="background:#012d1d;color:#e8f5ed;font-size:36px;font-weight:bold;letter-spacing:8px;text-align:center;padding:20px;border-radius:8px">{code}</div>
+              <p style="color:#666;margin:16px 0 0;font-size:13px">This code expires in 10 minutes. If you didn't request it, ignore this email.</p>
+            </div>""",
+            "text": f"Your Krishi Sewa code is {code}. Expires in 10 min."
+        })
+    except Exception as e:
+        print(f"[OTP] Resend error: {e}", flush=True)
+        return jsonify({"error": "Failed to send email: " + str(e)}), 502
+    resp = jsonify({"ok": True, "message": "OTP sent to " + email})
+    return resp, 200
+
+@app.route("/api/auth/verify-otp", methods=["POST"])
+def verify_otp():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    code = (data.get("code") or "").strip()
+    if not email or not code:
+        return jsonify({"error": "Email and code required"}), 400
+    rec = OTP_STORE.get(email)
+    if not rec:
+        return jsonify({"error": "No OTP requested for this email"}), 400
+    if time.time() > rec["expires_at"]:
+        OTP_STORE.pop(email, None)
+        return jsonify({"error": "Code expired, request a new one"}), 400
+    if rec["attempts"] >= 5:
+        OTP_STORE.pop(email, None)
+        return jsonify({"error": "Too many attempts, request a new code"}), 429
+    if rec["code"] != code:
+        rec["attempts"] += 1
+        return jsonify({"error": f"Wrong code ({5 - rec['attempts']} attempts left)"}), 400
+    user = AUTH_DB.get(email) or {"email": email, "name": rec.get("name") or email.split("@")[0], "created_at": datetime.utcnow().isoformat() + "Z"}
+    if not AUTH_DB.get(email) or (rec.get("name") and rec["name"] != user.get("name")):
+        if rec.get("name"): user["name"] = rec["name"]
+        AUTH_DB[email] = user
+    OTP_STORE.pop(email, None)
+    token = _new_token()
+    SESSIONS[token] = {"email": email, "name": user["name"], "created_at": time.time()}
+    resp = jsonify({"ok": True, "user": {"email": user["email"], "name": user["name"]}})
+    resp.set_cookie("krishi_session", token, max_age=SESSION_TTL, httponly=True, samesite="Lax", secure=False)
+    return resp, 200
+
+@app.route("/api/auth/me")
+def auth_me():
+    s = _get_session(request)
+    if not s: return jsonify({"user": None}), 401
+    return jsonify({"user": {"email": s["email"], "name": s["name"]}})
+
+@app.route("/api/auth/logout", methods=["POST"])
+def auth_logout():
+    s = _get_session(request)
+    if s: SESSIONS.pop(s["token"], None)
+    resp = jsonify({"ok": True})
+    resp.delete_cookie("krishi_session")
+    return resp
 
 @app.route("/api/admin/stats")
 def admin_stats():

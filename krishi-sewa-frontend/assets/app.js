@@ -3175,6 +3175,31 @@ function setupErrorBoundary() {
       showFatalError(event.reason.message || 'Network error');
     }
   });
+
+  // Online/offline detection
+  window.addEventListener('online', () => {
+    document.getElementById('offlineBanner')?.remove();
+    toast('Back online');
+    // Re-sync on reconnect
+    if (state.authUser) syncFromBackend();
+  });
+  window.addEventListener('offline', () => {
+    showOfflineBanner();
+  });
+  // Check on startup
+  if (!navigator.onLine) showOfflineBanner();
+}
+
+function showOfflineBanner() {
+  if (document.getElementById('offlineBanner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'offlineBanner';
+  banner.className = 'fixed top-0 left-0 right-0 z-[100] bg-error text-on-error py-2 px-4 text-center text-sm font-semibold flex items-center justify-center gap-2';
+  banner.innerHTML = `
+    <span class="material-symbols-outlined text-[18px]">wifi_off</span>
+    <span>You're offline. Some features may not work until you reconnect.</span>
+  `;
+  document.body.prepend(banner);
 }
 
 function showFatalError(message) {

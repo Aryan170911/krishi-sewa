@@ -337,14 +337,12 @@ app.get("/api/admin/support/me", (req, res) => {
 // ---- User: start a chat ----
 app.post("/api/support/chat/start", async (req, res) => {
   try {
-    const email = String(req.body?.email || (state_authEmailFromSession(req)) || "").trim().toLowerCase();
-    const name = String(req.body?.name || "").trim();
+    const sess = getSession(req);
+    if (!sess) return res.status(401).json({ error: "Login required" });
+    const userEmail = sess.email;
+    const userName = sess.name || userEmail.split("@")[0];
     const subject = String(req.body?.subject || "How can we help?").slice(0, 200);
     const category = String(req.body?.category || "general");
-    if (!email) return res.status(400).json({ error: "Email required" });
-    const sess = getSession(req);
-    const userEmail = sess?.email || email;
-    const userName = sess?.name || name || userEmail.split("@")[0];
     const chat = {
       user_email: userEmail, user_name: userName, subject, category,
       status: "open", assigned_admin_email: null,
@@ -1048,7 +1046,9 @@ app.get("/api/orders/:id", async (req, res) => {
   res.json(order);
 });
 app.post("/api/orders", orderLimiter, async (req, res) => {
-  const { items, address, paymentMethod } = req.body;
+  const session = getSession(req);
+  if (!session) return res.status(401).json({ error: "Login required to place an order" });
+  const { items, address, paymentMethod } = req.body || {};
   if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: "Items array required" });
   if (!Array.isArray(items) || items.length > 20) return res.status(400).json({ error: "Too many items (max 20)" });
   if (!address || !address.fullName || !address.phone || !address.address || !address.state || !address.district || !address.pincode) return res.status(400).json({ error: "Complete billing address required" });
@@ -1063,7 +1063,6 @@ app.post("/api/orders", orderLimiter, async (req, res) => {
     console.warn(`[order] District '${address.district}' not in top list for state ${address.state}, accepting anyway (pincode validated)`);
   }
   if (!["upi","card","netbanking","cod","razorpay"].includes(paymentMethod)) return res.status(400).json({ error: "Invalid paymentMethod" });
-  const session = getSession(req);
   const enrichedItems = [];
   for (const item of items) {
     const product = products.find((p) => p.id === parseInt(item.id));

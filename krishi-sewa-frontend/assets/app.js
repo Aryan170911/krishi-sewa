@@ -59,17 +59,13 @@ function toast(msg) {
 // API helpers with graceful fallback + auto retry on 3001 if 3000 fails
 async function apiGet(path) {
   const bases = [API_BASE];
-  // If primary is 3000, also try 3001 as fallback
   if (API_BASE.includes(":3000")) bases.push(API_BASE.replace(":3000", ":3001"));
   for (const base of bases) {
     try {
       const res = await fetch(`${base}${path}`, { credentials: "include" });
+      if (res.status === 401) { state.authUser = null; localStorage.removeItem("krishi_user"); }
       if (!res.ok) throw new Error(`API ${res.status}`);
-      // Update API_BASE to working base for future calls
-      if (base !== API_BASE) {
-        // cache successful base via global
-        window.__krishi_api_base = base;
-      }
+      if (base !== API_BASE) window.__krishi_api_base = base;
       return await res.json();
     } catch (e) {
       console.warn(`API GET ${base}${path} failed:`, e.message);

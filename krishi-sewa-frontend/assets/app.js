@@ -15,7 +15,7 @@ async function initAuth() {
       // check existing session
       try {
         const me = await apiPost("/auth/me", {}, true);
-        if (me?.user) { state.authUser = me.user; localStorage.setItem("krishi_user", JSON.stringify(me.user)); }
+        if (me?.user) { state.authUser = me.user; localStorage.setItem("krishi_user", JSON.stringify(me.user)); syncServerCartOnLogin(); }
         else { state.authUser = null; localStorage.removeItem("krishi_user"); }
       } catch {}
     }
@@ -40,20 +40,33 @@ function getApiBase() {
 const API_BASE = getApiBase();
 
 // Toast notification (defined here so app.js works standalone without admin.js)
-function toast(msg) {
+function toast(msg, type = "default") {
   let host = document.getElementById("krishi-toast-host");
   if (!host) {
     host = document.createElement("div");
     host.id = "krishi-toast-host";
-    host.className = "fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-[200] flex flex-col gap-2 pointer-events-none";
+    host.className = "fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[200] flex flex-col gap-2 pointer-events-none items-center";
     document.body.appendChild(host);
   }
   const el = document.createElement("div");
-  el.className = "bg-on-surface text-surface px-5 py-3 rounded-xl shadow-2xl text-sm font-semibold opacity-0 translate-y-2 transition-all duration-300 max-w-sm text-center";
-  el.textContent = msg;
+  const colors = {
+    default: "bg-on-surface text-surface",
+    success: "bg-primary text-on-primary",
+    error: "bg-error text-on-error",
+    warning: "bg-secondary-container text-on-secondary-container"
+  };
+  const icons = {
+    default: "info",
+    success: "check_circle",
+    error: "error",
+    warning: "warning"
+  };
+  el.className = `${colors[type] || colors.default} px-5 py-3 rounded-xl shadow-2xl text-sm font-semibold opacity-0 translate-y-2 transition-all duration-300 max-w-sm flex items-center gap-2`;
+  el.innerHTML = `<span class="material-symbols-outlined text-[18px]" aria-hidden="true">${icons[type] || icons.default}</span><span>${msg}</span>`;
+  el.setAttribute("role", type === "error" ? "alert" : "status");
   host.appendChild(el);
   requestAnimationFrame(() => { el.classList.remove("opacity-0", "translate-y-2"); el.classList.add("opacity-100", "translate-y-0"); });
-  setTimeout(() => { el.classList.add("opacity-0", "translate-y-2"); setTimeout(() => el.remove(), 350); }, 3000);
+  setTimeout(() => { el.classList.add("opacity-0", "translate-y-2"); setTimeout(() => el.remove(), 350); }, 3500);
 }
 
 // API helpers with graceful fallback + auto retry on 3001 if 3000 fails
@@ -315,12 +328,14 @@ let apiAvailable = false;
 
 async function syncFromBackend() {
   const ordersPath = "/orders";
-  const [productsData, categoriesData, eventsData, ordersData, statesData] = await Promise.all([
+  const wishlistPath = state.authUser ? "/wishlist" : null;
+  const [productsData, categoriesData, eventsData, ordersData, statesData, wishlistData] = await Promise.all([
     apiGet("/products"),
     apiGet("/categories"),
     apiGet("/events"),
     apiGet(ordersPath),
-    apiGet("/states")
+    apiGet("/states"),
+    wishlistPath ? apiGet(wishlistPath) : Promise.resolve(null)
   ]);
   if (productsData) {
     activeProducts = productsData;
@@ -341,6 +356,11 @@ async function syncFromBackend() {
   if (Array.isArray(statesData) && statesData.length) {
     indianStates.length = 0;
     indianStates.push(...statesData);
+  }
+  if (Array.isArray(wishlistData)) {
+    state.wishlistCount = wishlistData.length;
+  } else {
+    state.wishlistCount = 0;
   }
   if (apiAvailable) {
     console.log(`✅ Backend connected: ${activeProducts.length} products loaded from API`);
@@ -493,6 +513,7 @@ function filterProducts() {
 function renderNav() {
   const cartCount = getCartCount();
   const authUser = state.authUser;
+  const wishlistCount = state.wishlistCount || 0;
   const navLinks = [
     { page: "home", label: "Home" },
     { page: "shop", label: "Shop" },
@@ -503,39 +524,40 @@ function renderNav() {
   return `
     <header class="bg-surface sticky top-0 z-50 w-full border-b border-outline-variant">
       <div class="flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto h-16 md:h-20">
-        <button class="md:hidden p-2 -ml-2 text-on-surface-variant hover:bg-surface-variant rounded-full transition-colors min-w-[48px] min-h-[48px] flex items-center justify-center" aria-label="Menu" onclick="toggleMobileMenu()">
-          <span class="material-symbols-outlined">${state.isMobileMenuOpen ? "close" : "menu"}</span>
+        <button class="md:hidden p-2 -ml-2 text-on-surface-variant hover:bg-surface-variant rounded-full transition-colors min-w-[48px] min-h-[48px] flex items-center justify-center" aria-label="${state.isMobileMenuOpen ? "Close menu" : "Open menu"}" onclick="toggleMobileMenu()">
+          <span class="material-symbols-outlined" aria-hidden="true">${state.isMobileMenuOpen ? "close" : "menu"}</span>
         </button>
-        <a class="text-headline-md md:text-headline-lg font-headline-md text-primary tracking-tight flex items-center gap-2 ${state.isMobileMenuOpen ? '' : 'md:mr-0'}" href="#home" onclick="navigateTo('home')">
-          <img alt="Krishi Sewa" class="hidden md:block h-10 w-10 object-contain rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwDvtdaTBWDNX2UfJ3-AqZRWrs0pDe1ji98caQB_eJydHiNKE1rNm_ubLD7GjzOVJoiP3f7WbYcbSdIBvlTkEnMpKQicqst27Vn4i20TUIkev4sa8mcKBReXdcrPLaTEkkUQ39MJqXzzqKne9xncLG0UbVwTm7DB43pDFCBmMCGUoTYEgN_G_v87p9CCIckElkQDMHO2e7SBrRkIx_lmsm7ABnJVIZRj_bqykazAJnlejRIXMFEsWBY-i0zflOmE4VQFE">
-          Krishi Sewa
+        <a class="text-headline-md md:text-headline-lg font-headline-md text-primary tracking-tight flex items-center gap-2" href="#home" onclick="navigateTo('home')" aria-label="Krishi Sewa - home">
+          <img alt="" class="hidden md:block h-10 w-10 object-contain rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwDvtdaTBWDNX2UfJ3-AqZRWrs0pDe1ji98caQB_eJydHiNKE1rNm_ubLD7GjzOVJoiP3f7WbYcbSdIBvlTkEnMpKQicqst27Vn4i20TUIkev4sa8mcKBReXdcrPLaTEkkUQ39MJqXzzqKne9xncLG0UbVwTm7DB43pDFCBmMCGUoTYEgN_G_v87p9CCIckElkQDMHO2e7SBrRkIx_lmsm7ABnJVIZRj_bqykazAJnlejRIXMFEsWBY-i0zflOmE4VQFE" aria-hidden="true">
+          <span>Krishi Sewa</span>
         </a>
-        <nav class="hidden md:flex gap-gutter items-center flex-1 justify-center">
+        <nav class="hidden md:flex gap-gutter items-center flex-1 justify-center" aria-label="Main navigation">
           ${navLinks.map(link => `
             <a class="font-label-md text-label-md transition-colors duration-200 ${state.currentPage === link.page && !link.action ? 'text-primary border-b-2 border-primary pb-1 font-bold' : 'text-on-surface-variant hover:text-primary'}" href="#${link.page}" onclick="navigateTo('${link.page}')${link.action ? '; ' + link.action : ''}; return false;">${link.label}</a>
           `).join("")}
         </nav>
-        <div class="flex items-center gap-2 md:gap-stack-md">
-          <button class="hidden md:flex p-2 text-on-surface-variant hover:text-primary hover:bg-surface-variant rounded-full transition-colors" aria-label="Search">
-            <span class="material-symbols-outlined">search</span>
+        <div class="flex items-center gap-1 md:gap-stack-md">
+          <button class="hidden md:flex p-2 text-on-surface-variant hover:text-primary hover:bg-surface-variant rounded-full transition-colors min-w-[48px] min-h-[48px] items-center justify-center" aria-label="Search products" onclick="openSearchDialog()">
+            <span class="material-symbols-outlined" aria-hidden="true">search</span>
+          </button>
+          <button class="relative p-2 text-on-surface-variant hover:text-primary hover:bg-surface-variant rounded-full transition-colors min-w-[48px] min-h-[48px] flex items-center justify-center" onclick="navigateTo('wishlist')" aria-label="Wishlist (${wishlistCount} items)">
+            <span class="material-symbols-outlined text-[24px]" aria-hidden="true" style="font-variation-settings: 'FILL' 1;">favorite</span>
+            ${wishlistCount > 0 ? `<span class="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-error text-[10px] font-bold text-on-error border border-surface">${wishlistCount > 99 ? "99+" : wishlistCount}</span>` : ""}
           </button>
           <button class="relative p-2 text-on-surface-variant hover:text-primary hover:bg-surface-variant rounded-full transition-colors min-w-[48px] min-h-[48px] flex items-center justify-center" onclick="navigateTo('cart')" aria-label="Cart (${cartCount} items)">
-            <span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">shopping_cart</span>
+            <span class="material-symbols-outlined text-[24px]" aria-hidden="true" style="font-variation-settings: 'FILL' 1;">shopping_cart</span>
             ${cartCount > 0 ? `<span class="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-accent-ochre text-[10px] font-bold text-on-tertiary-fixed border border-surface">${cartCount > 99 ? "99+" : cartCount}</span>` : ""}
           </button>
           ${authUser ? `
-            <button onclick="navigateTo('profile')" class="hidden md:flex items-center gap-2 bg-secondary-container rounded-full pl-2 pr-3 py-1 border border-outline-variant hover:border-primary transition-colors">
-              <div class="h-7 w-7 rounded-full bg-primary text-on-primary flex items-center justify-center text-xs font-bold">${(authUser.name || authUser.email || "U")[0].toUpperCase()}</div>
-              <span class="text-xs font-semibold text-on-secondary-container max-w-[120px] truncate">${(authUser.name || authUser.email || "User")}</span>
-              <span class="material-symbols-outlined text-on-surface-variant text-base">expand_more</span>
+            <button onclick="navigateTo('profile')" class="hidden md:flex items-center gap-2 bg-secondary-container rounded-full pl-1 pr-3 py-1 border border-outline-variant hover:border-primary transition-colors min-h-[40px]" aria-label="My profile">
+              <div class="h-8 w-8 rounded-full bg-primary text-on-primary flex items-center justify-center text-xs font-bold">${(authUser.name || authUser.email || "U")[0].toUpperCase()}</div>
+              <span class="text-xs font-semibold text-on-secondary-container max-w-[120px] truncate hidden lg:inline">${(authUser.name || authUser.email || "User")}</span>
+              <span class="material-symbols-outlined text-on-surface-variant text-base" aria-hidden="true">expand_more</span>
             </button>
           ` : `
-            <button class="hidden md:flex items-center gap-1 bg-primary text-on-primary font-label-md text-label-md px-4 py-2 rounded-lg hover:opacity-90 transition-opacity" onclick="navigateTo('auth')">
-              <span class="material-symbols-outlined text-lg">login</span> Login
+            <button class="hidden md:flex items-center gap-1 bg-primary text-on-primary font-label-md text-label-md px-4 py-2 rounded-lg hover:opacity-90 transition-opacity min-h-[40px]" onclick="navigateTo('auth')">
+              <span class="material-symbols-outlined text-lg" aria-hidden="true">login</span> Login
             </button>
-            <div onclick="navigateTo('auth')" class="hidden md:flex h-8 w-8 rounded-full bg-secondary-container overflow-hidden border border-outline-variant cursor-pointer items-center justify-center text-on-secondary-container">
-              <span class="material-symbols-outlined text-lg">person</span>
-            </div>
           `}
         </div>
       </div>
@@ -596,22 +618,29 @@ function renderMobileBottomNav() {
   const navItems = [
     { page: "home", icon: "home", label: "Home" },
     { page: "shop", icon: "storefront", label: "Shop" },
+    { page: "wishlist", icon: "favorite", label: "Saved" },
     { page: "cart", icon: "shopping_cart", label: "Cart" },
-    { page: "orders", icon: "package_2", label: "Orders" }
+    { page: "profile", icon: "account_circle", label: "Profile" }
   ];
 
-  const hideOnPages = ["checkout", "confirmation", "auth", "coming-soon", "profile"];
+  const hideOnPages = ["checkout", "confirmation", "auth", "coming-soon"];
   if (hideOnPages.includes(state.currentPage)) return "";
 
   return `
-    <nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface border-t border-outline-variant safe-area-bottom shadow-[0_-4px_12px_rgba(1,45,29,0.06)]">
-      <div class="flex justify-around items-center h-16 px-2 max-w-container-max mx-auto">
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface border-t border-outline-variant safe-area-bottom shadow-[0_-4px_12px_rgba(1,45,29,0.06)]" role="navigation" aria-label="Main navigation">
+      <div class="flex justify-around items-center h-16 px-1 max-w-container-max mx-auto">
         ${navItems.map(item => {
           const isActive = state.currentPage === item.page || (item.page === "cart" && state.currentPage === "checkout");
+          const badge = item.page === "cart" && state.cart.length > 0
+            ? `<span class="absolute top-1 right-1 bg-error text-on-error text-[9px] font-bold rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center">${state.cart.length}</span>`
+            : (item.page === "wishlist" && (state.wishlistCount || 0) > 0
+              ? `<span class="absolute top-1 right-1 bg-error text-on-error text-[9px] font-bold rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center">${state.wishlistCount}</span>`
+              : "");
           return `
-            <button class="flex flex-col items-center justify-center gap-0.5 min-w-[64px] min-h-[48px] rounded-xl transition-colors ${isActive ? "text-primary" : "text-on-surface-variant"}" onclick="navigateTo('${item.page}')">
-              <span class="material-symbols-outlined text-[22px]" style="font-variation-settings: 'FILL' ${isActive ? 1 : 0};">${item.icon}</span>
-              <span class="text-label-sm font-label-sm">${item.label}</span>
+            <button class="relative flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[48px] rounded-xl transition-colors ${isActive ? "text-primary" : "text-on-surface-variant"}" onclick="navigateTo('${item.page}')" aria-label="${item.label}" aria-current="${isActive ? 'page' : 'false'}">
+              <span class="material-symbols-outlined text-[22px]" style="font-variation-settings: 'FILL' ${isActive ? 1 : 0};" aria-hidden="true">${item.icon}</span>
+              <span class="text-[10px] font-semibold">${item.label}</span>
+              ${badge}
             </button>
           `;
         }).join("")}
@@ -1260,13 +1289,34 @@ function showProductTab(tabName) {
 function renderCartPage() {
   if (state.cart.length === 0) {
     return `
-      <main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-section-gap flex flex-col items-center text-center">
-        <span class="material-symbols-outlined text-outline text-8xl mb-6">shopping_cart</span>
+      <main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-section-gap flex flex-col items-center text-center min-h-[60vh]">
+        <div class="mb-6">
+          <span class="material-symbols-outlined text-primary/30 text-9xl">shopping_cart</span>
+        </div>
         <h1 class="font-headline-xl text-headline-xl text-primary mb-3">Your Cart is Empty</h1>
         <p class="font-body-lg text-body-lg text-on-surface-variant mb-8 max-w-md">Looks like you haven't added any seeds or tools yet. Start cultivating your garden!</p>
-        <button class="bg-primary text-on-primary px-8 py-3 rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors" onclick="navigateTo('shop')">
-          <span class="material-symbols-outlined mr-2">storefront</span> Continue Shopping
-        </button>
+        <div class="flex flex-col sm:flex-row gap-3">
+          <button class="bg-primary text-on-primary px-8 py-3 rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors min-h-[48px] flex items-center justify-center gap-2" onclick="navigateTo('shop')">
+            <span class="material-symbols-outlined">storefront</span> Browse Products
+          </button>
+          <button class="border border-outline-variant px-8 py-3 rounded-lg font-label-md text-label-md hover:bg-surface-variant transition-colors min-h-[48px] flex items-center justify-center gap-2" onclick="openSearchDialog()">
+            <span class="material-symbols-outlined">search</span> Search
+          </button>
+        </div>
+        <div class="mt-12 grid grid-cols-2 md:grid-cols-3 gap-3 max-w-2xl w-full">
+          <a onclick="navigateTo('shop'); setCategory('seeds')" class="cursor-pointer p-4 bg-surface-container-lowest border border-outline-variant rounded-xl hover:border-primary text-left">
+            <span class="material-symbols-outlined text-primary text-2xl">grass</span>
+            <p class="font-semibold mt-1 text-sm">Seeds</p>
+          </a>
+          <a onclick="navigateTo('shop'); setCategory('fertilizers')" class="cursor-pointer p-4 bg-surface-container-lowest border border-outline-variant rounded-xl hover:border-primary text-left">
+            <span class="material-symbols-outlined text-primary text-2xl">science</span>
+            <p class="font-semibold mt-1 text-sm">Fertilizers</p>
+          </a>
+          <a onclick="navigateTo('shop'); setCategory('tools')" class="cursor-pointer p-4 bg-surface-container-lowest border border-outline-variant rounded-xl hover:border-primary text-left">
+            <span class="material-symbols-outlined text-primary text-2xl">handyman</span>
+            <p class="font-semibold mt-1 text-sm">Tools</p>
+          </a>
+        </div>
       </main>
     `;
   }
@@ -1400,6 +1450,7 @@ function renderCheckoutPage() {
             <h2 class="text-headline-md font-headline-md text-primary mb-stack-md flex items-center gap-2">
               <span class="material-symbols-outlined">location_on</span> Billing Address
             </h2>
+            <div id="savedAddressesBlock"></div>
             <form class="grid grid-cols-1 md:grid-cols-2 gap-stack md" id="billingForm">
               <div class="md:col-span-2">
                 <label class="block text-label-md font-label-md text-on-surface-variant mb-unit" for="fullName">Full Name</label>
@@ -1439,6 +1490,10 @@ function renderCheckoutPage() {
                 <input class="w-full bg-surface-container-low border-b border-outline-variant focus:border-primary focus:ring-0 px-4 py-3 text-body-md text-on-surface rounded-t-DEFAULT outline-none transition-colors" id="pincode" placeholder="6-digit code" type="text" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" value="${state.billingAddress.pincode || ''}" required oninput="onPincodeChange(this.value)">
               </div>
             </form>
+            <label class="mt-4 flex items-center gap-2 text-sm text-on-surface-variant">
+              <input type="checkbox" id="saveAddressCheckbox" class="accent-primary">
+              Save this address to my account for future orders
+            </label>
             <button class="mt-6 w-full md:w-auto bg-primary text-on-primary px-8 py-3 rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors flex items-center justify-center gap-2" onclick="proceedToPayment()">
               Continue to Payment <span class="material-symbols-outlined">arrow_forward</span>
             </button>
@@ -1686,6 +1741,13 @@ function renderConfirmationPage() {
               <p class="font-body-sm text-body-sm text-on-surface-variant mt-1 hidden md:block">On its way to you.</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Real-time status history from server -->
+      <div class="w-full max-w-3xl mb-section-gap">
+        <div id="orderEventsTimeline" class="bg-surface-container-low border border-outline-variant rounded-xl p-6">
+          <p class="text-sm text-on-surface-variant text-center">Loading order status…</p>
         </div>
       </div>
 
@@ -2056,6 +2118,7 @@ async function handleVerifyCode(){
     if (r.error) { msg.textContent = r.error; msg.className="text-center text-sm text-error"; return; }
     state.authUser = r.user;
     localStorage.setItem("krishi_user", JSON.stringify(r.user));
+    await syncServerCartOnLogin();
     msg.textContent="✅ Welcome "+r.user.name+"!"; msg.className="text-center text-sm text-green-700";
     toast("Welcome "+r.user.name);
     setTimeout(()=>navigateTo("shop"), 800);
@@ -2080,6 +2143,7 @@ async function handleLogin(e){
     if (r.error) { msg.textContent = r.error; msg.className="text-center text-sm text-error"; return; }
     state.authUser = r.user;
     localStorage.setItem("krishi_user", JSON.stringify(r.user));
+    await syncServerCartOnLogin();
     msg.textContent="✅ Welcome back, "+r.user.name; msg.className="text-center text-sm text-green-700";
     toast("Welcome "+r.user.name);
     setTimeout(()=>navigateTo("shop"), 500);
@@ -2457,6 +2521,72 @@ function backToAddress() {
   }
 }
 
+async function loadSavedAddressesForCheckout() {
+  if (!state.authUser) return;
+  const block = document.getElementById('savedAddressesBlock');
+  if (!block) return;
+  try {
+    const addrs = await apiGet('/addresses') || [];
+    if (addrs.length === 0) { block.innerHTML = ''; return; }
+    block.innerHTML = `
+      <div class="mb-4 p-3 bg-primary-container/20 border border-primary rounded-lg">
+        <p class="text-sm font-semibold text-primary mb-2 flex items-center gap-1">
+          <span class="material-symbols-outlined text-[18px]">bookmark</span> Use a saved address
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          ${addrs.map(a => `
+            <button type="button" onclick="fillBillingFromSaved('${a.id}')" class="text-left p-2 bg-white border border-outline-variant rounded-lg hover:border-primary text-sm">
+              <p class="font-semibold">${escapeHtml(a.label || 'Home')} ${a.is_default ? '<span class="text-[10px] bg-primary text-on-primary px-1.5 py-0.5 rounded-full">DEFAULT</span>' : ''}</p>
+              <p class="text-xs text-on-surface-variant truncate">${escapeHtml(a.address_line1)}, ${escapeHtml(a.district)}</p>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  } catch (e) { console.warn('loadSavedAddressesForCheckout:', e.message); }
+}
+
+function fillBillingFromSaved(addressId) {
+  fetch(`${API_BASE}/addresses`, { credentials: 'include' })
+    .then(r => r.json())
+    .then(addrs => {
+      const a = addrs.find(x => x.id === addressId);
+      if (!a) return;
+      document.getElementById('fullName').value = a.full_name || '';
+      document.getElementById('phone').value = a.phone || '';
+      document.getElementById('address').value = a.address_line1 || '';
+      document.getElementById('address2').value = a.address_line2 || '';
+      document.getElementById('stateSelect').value = a.state || '';
+      updateDistricts(a.state);
+      setTimeout(() => {
+        const dsel = document.getElementById('districtSelect');
+        if (dsel) dsel.value = a.district || '';
+      }, 100);
+      document.getElementById('pincode').value = a.pincode || '';
+      showToast?.(`Loaded: ${a.label || 'saved address'}`);
+    });
+}
+
+async function saveAddressFromCheckout() {
+  if (!state.authUser) return;
+  const cb = document.getElementById('saveAddressCheckbox');
+  if (!cb || !cb.checked) return;
+  const body = {
+    label: 'Home',
+    fullName: state.billingAddress.fullName,
+    phone: state.billingAddress.phone,
+    addressLine1: state.billingAddress.address,
+    addressLine2: state.billingAddress.address2,
+    district: state.billingAddress.district,
+    state: state.billingAddress.state,
+    pincode: state.billingAddress.pincode,
+    isDefault: false
+  };
+  try {
+    await apiPost('/addresses', body, true);
+  } catch (e) { console.warn('saveAddressFromCheckout:', e.message); }
+}
+
 function setPaymentMethod(method) {
   state.paymentMethod = method;
 }
@@ -2480,6 +2610,19 @@ async function placeOrder() {
     paymentMethod: state.paymentMethod
   };
 
+  // Save address if user checked the box
+  await saveAddressFromCheckout();
+
+  // Sync cart to server before placing order
+  try {
+    await fetch(`${API_BASE}/cart`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ items: state.cart })
+    });
+  } catch {}
+
   // Disable button feedback
   const btn = document.querySelector('button[onclick="placeOrder()"]');
   const originalText = btn ? btn.innerHTML : "";
@@ -2500,6 +2643,8 @@ async function placeOrder() {
     showToast(`Order ${order.id} placed!`);
     state.cart = [];
     saveCart();
+    // Clear server cart
+    try { await fetch(`${API_BASE}/cart`, { method: 'DELETE', credentials: 'include' }); } catch {}
     navigateTo('confirmation');
   } catch (e) {
     console.error("placeOrder failed:", e);
@@ -2553,17 +2698,65 @@ function showToast(message) {
 
 function render404Page() {
   return `
-    <main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-section-gap flex flex-col items-center text-center">
-      <span class="material-symbols-outlined text-outline text-8xl mb-6">search_off</span>
+    <main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-section-gap flex flex-col items-center text-center min-h-[60vh]">
+      <div class="mb-6">
+        <span class="material-symbols-outlined text-primary/30 text-9xl md:text-[160px] leading-none">compass_off</span>
+      </div>
       <h1 class="font-headline-xl text-headline-xl text-primary mb-3">Page Not Found</h1>
       <p class="font-body-lg text-body-lg text-on-surface-variant mb-8 max-w-md">The page you're looking for doesn't exist or the product may have been removed. Let's get you back to the harvest.</p>
-      <div class="flex gap-3">
-        <button class="bg-primary text-on-primary px-6 py-3 rounded-lg font-semibold hover:bg-primary-container transition-colors" onclick="navigateTo('home')">Go Home</button>
-        <button class="border border-outline-variant px-6 py-3 rounded-lg font-semibold hover:bg-surface-variant transition-colors" onclick="navigateTo('shop')">Browse Shop</button>
+      <div class="flex flex-col sm:flex-row gap-3">
+        <button class="bg-primary text-on-primary px-6 py-3 rounded-lg font-semibold hover:bg-primary-container transition-colors min-h-[48px] flex items-center justify-center gap-2" onclick="navigateTo('home')">
+          <span class="material-symbols-outlined">home</span> Go Home
+        </button>
+        <button class="border border-outline-variant px-6 py-3 rounded-lg font-semibold hover:bg-surface-variant transition-colors min-h-[48px] flex items-center justify-center gap-2" onclick="navigateTo('shop')">
+          <span class="material-symbols-outlined">storefront</span> Browse Shop
+        </button>
+        <button class="border border-outline-variant px-6 py-3 rounded-lg font-semibold hover:bg-surface-variant transition-colors min-h-[48px] flex items-center justify-center gap-2" onclick="openSearchDialog()">
+          <span class="material-symbols-outlined">search</span> Search
+        </button>
       </div>
     </main>
   `;
 }
+
+function openSearchDialog() {
+  if (document.getElementById("krishi-search-dialog")) return;
+  const overlay = document.createElement("div");
+  overlay.id = "krishi-search-dialog";
+  overlay.className = "fixed inset-0 z-[200] bg-inverse-surface/60 backdrop-blur-sm flex items-start justify-center pt-[10vh] px-4";
+  overlay.onclick = (e) => { if (e.target === overlay) closeSearchDialog(); };
+  overlay.innerHTML = `
+    <div class="w-full max-w-2xl bg-surface rounded-2xl shadow-2xl border border-outline-variant overflow-hidden" onclick="event.stopPropagation()">
+      <form onsubmit="event.preventDefault(); state.searchQuery=this.q.value.trim(); navigateTo('search'); closeSearchDialog();" class="flex items-center gap-3 p-4 border-b border-outline-variant">
+        <span class="material-symbols-outlined text-on-surface-variant" aria-hidden="true">search</span>
+        <input name="q" type="search" placeholder="Search seeds, fertilizers, tools..." autofocus class="flex-1 bg-transparent outline-none text-lg" autocomplete="off">
+        <button type="button" onclick="closeSearchDialog()" class="text-on-surface-variant hover:text-on-surface p-1" aria-label="Close search">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </form>
+      <div class="p-3 text-xs text-on-surface-variant">
+        <p class="mb-2">Quick links</p>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="state.searchQuery='tomato'; navigateTo('search'); closeSearchDialog();" class="px-3 py-1.5 bg-surface-container-low rounded-full hover:bg-primary-container hover:text-on-primary-container text-sm">tomato</button>
+          <button onclick="state.searchQuery='fertilizer'; navigateTo('search'); closeSearchDialog();" class="px-3 py-1.5 bg-surface-container-low rounded-full hover:bg-primary-container hover:text-on-primary-container text-sm">fertilizer</button>
+          <button onclick="state.searchQuery='tools'; navigateTo('search'); closeSearchDialog();" class="px-3 py-1.5 bg-surface-container-low rounded-full hover:bg-primary-container hover:text-on-primary-container text-sm">tools</button>
+          <button onclick="state.searchQuery='seeds'; navigateTo('search'); closeSearchDialog();" class="px-3 py-1.5 bg-surface-container-low rounded-full hover:bg-primary-container hover:text-on-primary-container text-sm">seeds</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.querySelector("input")?.focus(), 50);
+  document.addEventListener("keydown", searchEscHandler);
+}
+
+function closeSearchDialog() {
+  const el = document.getElementById("krishi-search-dialog");
+  if (el) el.remove();
+  document.removeEventListener("keydown", searchEscHandler);
+}
+
+function searchEscHandler(e) { if (e.key === "Escape") closeSearchDialog(); }
 
 function renderProfilePage() {
   const user = state.authUser;
@@ -2779,7 +2972,8 @@ function renderApp() {
       pageContent = render404Page();
   }
 
-  app.innerHTML = renderNav() + pageContent + renderFooter() + renderMobileBottomNav() + renderSupportWidget();
+  app.innerHTML = renderNav() + pageContent + renderFooter() + renderMobileBottomNav() + renderSupportWidget() + renderBackToTop();
+  setupBackToTop();
 }
 
 // ============================================
@@ -3089,6 +3283,28 @@ function renderSupportInput() {
 function autoGrowSupportInput(el) {
   el.style.height = "40px";
   el.style.height = Math.min(el.scrollHeight, 128) + "px";
+}
+
+// ============================================
+// BACK TO TOP button
+// ============================================
+function renderBackToTop() {
+  return `<button id="backToTopBtn" class="hidden fixed bottom-32 md:bottom-24 right-4 md:right-6 z-[80] h-12 w-12 rounded-full bg-primary text-on-primary shadow-2xl hover:scale-110 transition-transform flex items-center justify-center" aria-label="Back to top" onclick="window.scrollTo({top:0,behavior:'smooth'})">
+    <span class="material-symbols-outlined" aria-hidden="true">arrow_upward</span>
+  </button>`;
+}
+
+function setupBackToTop() {
+  const btn = document.getElementById("backToTopBtn");
+  if (!btn) return;
+  const onScroll = () => {
+    if (window.scrollY > 600) btn.classList.remove("hidden");
+    else btn.classList.add("hidden");
+  };
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+  // Clean up on next render to avoid duplicates
+  btn.dataset.bound = "1";
 }
 
 let userTypingTimer = null;
@@ -3591,7 +3807,68 @@ setTimeout(() => {
   }
   if (state.currentPage === "search") loadSearchResults();
   if (state.currentPage === "wishlist") loadWishlistPage();
+  if (state.currentPage === "checkout") loadSavedAddressesForCheckout();
+  if (state.currentPage === "confirmation") loadOrderEventsTimeline();
 }, 200);
+
+async function syncServerCartOnLogin() {
+  try {
+    const serverCart = await apiGet('/cart');
+    if (serverCart && Array.isArray(serverCart.items) && serverCart.items.length > 0) {
+      // Server has items — merge (sum quantities for duplicates)
+      const map = new Map();
+      // Add local cart first
+      state.cart.forEach(c => map.set(c.id, { ...c }));
+      // Add server items
+      serverCart.items.forEach(c => {
+        if (map.has(c.id)) {
+          map.get(c.id).quantity = (map.get(c.id).quantity || 0) + (c.quantity || 0);
+        } else {
+          map.set(c.id, { id: c.id, name: c.name, price: c.price, image: c.image, quantity: c.quantity || 1 });
+        }
+      });
+      state.cart = Array.from(map.values());
+      saveCart();
+      toast(`Synced ${state.cart.length} item(s) from your saved cart`);
+    }
+  } catch (e) { console.warn('syncServerCartOnLogin:', e.message); }
+}
+
+async function loadOrderEventsTimeline() {
+  if (!state.lastOrder) return;
+  const wrap = document.getElementById('orderEventsTimeline');
+  if (!wrap) return;
+  try {
+    const events = await apiGet(`/orders/${encodeURIComponent(state.lastOrder.id)}/events`) || [];
+    if (events.length === 0) {
+      wrap.innerHTML = `<p class="text-sm text-on-surface-variant text-center">No status updates yet</p>`;
+      return;
+    }
+    wrap.innerHTML = `
+      <h3 class="font-bold text-primary mb-4 flex items-center gap-2"><span class="material-symbols-outlined">timeline</span> Order Status History</h3>
+      <div class="space-y-3">
+        ${events.map((e, i) => `
+          <div class="flex gap-3">
+            <div class="flex flex-col items-center">
+              <div class="h-8 w-8 rounded-full bg-primary text-on-primary flex items-center justify-center text-xs font-bold shrink-0">
+                ${i + 1}
+              </div>
+              ${i < events.length - 1 ? '<div class="w-0.5 flex-1 bg-outline-variant mt-1"></div>' : ''}
+            </div>
+            <div class="flex-1 pb-3">
+              <p class="font-semibold text-sm text-on-surface capitalize">${escapeHtml((e.event_type || '').replace(/_/g, ' '))}</p>
+              <p class="text-xs text-on-surface-variant">${new Date(e.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+              ${e.actor_email ? `<p class="text-xs text-on-surface-variant">by ${escapeHtml(e.actor_email)}</p>` : ''}
+              ${e.details && Object.keys(e.details).length > 0 ? `<p class="text-xs text-on-surface-variant mt-1">${escapeHtml(JSON.stringify(e.details))}</p>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch (e) {
+    wrap.innerHTML = `<p class="text-sm text-on-surface-variant text-center">Status unavailable</p>`;
+  }
+}
 
 // ============================================
 // WISHLIST BUTTON on product cards
@@ -3608,8 +3885,46 @@ async function toggleWishlist(productId) {
       await apiPost(`/wishlist/${productId}`, {}, true);
       showToast("Added to wishlist ❤️");
     }
+    // Update count and re-render to show updated badges
+    state.wishlistCount = (list.length || 0) + (has ? -1 : 1);
+    renderApp();
   } catch (e) { showToast("Failed: " + e.message); }
 }
+
+// Global Escape key handler for modals/drawers
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    if (state.isMobileMenuOpen) closeMobileMenu();
+    closeSearchDialog();
+    const userModal = document.getElementById("userContextModal");
+    if (userModal) userModal.remove();
+  }
+});
+
+// Global image fallback: replace broken images with a styled placeholder
+document.addEventListener("error", (e) => {
+  if (e.target.tagName === "IMG" && !e.target.dataset.fallback) {
+    e.target.dataset.fallback = "1";
+    e.target.classList.add("img-fallback");
+    e.target.style.minHeight = "120px";
+    e.target.alt = e.target.alt || "Image";
+  }
+}, true);
+
+// Global error boundary: catch uncaught errors and show a friendly message
+window.addEventListener("error", (e) => {
+  console.error("[krishi] uncaught error:", e.error);
+  if (e.error && /network|fetch|api/i.test(String(e.error.message || ""))) {
+    showToast("Network error — check your connection");
+  }
+});
+
+window.addEventListener("unhandledrejection", (e) => {
+  console.error("[krishi] unhandled rejection:", e.reason);
+  if (e.reason && /network|fetch|api/i.test(String(e.reason.message || e.reason))) {
+    showToast("Network error — please try again");
+  }
+});
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);

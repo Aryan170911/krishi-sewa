@@ -153,10 +153,55 @@ tailwind.config = {
 @media (prefers-reduced-motion: reduce) {
   .drawer-slide-in { animation: none; }
 }
+/* Skip link for accessibility */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 8px;
+  z-index: 9999;
+  background: #012d1d;
+  color: #ffffff;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: top 0.2s;
+}
+.skip-link:focus {
+  top: 8px;
+  outline: 3px solid #cd9d6d;
+  outline-offset: 2px;
+}
+/* Better focus visibility */
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid #cd9d6d;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+/* Loading skeleton */
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #e0e3df 25%, #f1f4f0 50%, #e0e3df 75%);
+  background-size: 1000px 100%;
+  animation: shimmer 1.5s infinite linear;
+  border-radius: 8px;
+}
+/* Image fallback */
+.img-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e8dfc5;
+  color: #012d1d;
+  font-weight: 600;
+}
 </style>
 </head>
 <body class="bg-background text-on-background font-body-md min-h-screen flex flex-col antialiased">
 <noscript><div class="bg-error-container text-on-error-container p-4 text-center font-semibold">Please enable JavaScript to run Krishi Sewa Foundation.</div></noscript>
+<a href="#app-content" class="skip-link">Skip to main content</a>
 <div id="app">
   <div class="flex items-center justify-center min-h-screen">
     <div class="text-center">
@@ -165,6 +210,7 @@ tailwind.config = {
     </div>
   </div>
 </div>
+<div id="app-content"></div>
 <script src="assets/app.js"></script>
 </body>
 </html>

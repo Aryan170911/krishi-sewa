@@ -355,19 +355,21 @@ def save_orders(orders):
 
 products = load_products()
 
-# Supabase (supports NEXT_PUBLIC_* for StackHost)
-SUPABASE_URL = os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL") or ""
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_ANON_KEY") or os.environ.get("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") or ""
+# Supabase (public anon key is safe to ship; service role stays env-only)
+SUPABASE_URL = os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL") or "https://xypizzylruvgcglhyiyb.supabase.co"
+SUPABASE_ANON = os.environ.get("SUPABASE_ANON_KEY") or os.environ.get("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") or "sb_publishable_h4JTK-FhACGp3JDCvHMHPg_R50Q7G2PIq9wBpkMn_50Q"
+SUPABASE_SERVICE = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or ""
+SUPABASE_KEY = SUPABASE_SERVICE or SUPABASE_ANON
 supabase = None
 if SUPABASE_URL and SUPABASE_KEY:
     try:
         from supabase import create_client
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        print(f"[Supabase] Connected to {SUPABASE_URL}", flush=True)
+        print(f"[Supabase] Connected to {SUPABASE_URL} as {'service' if SUPABASE_SERVICE else 'anon'}", flush=True)
     except Exception as e:
         print(f"[Supabase] init failed, using JSON: {e}", flush=True)
 else:
-    print("[Supabase] Not configured — using JSON files", flush=True)
+    print("[Supabase] Not configured - using JSON files", flush=True)
 
 # Razorpay config (test keys)
 RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "rzp_test_Sv4HWH1qFfP22s")
@@ -447,8 +449,8 @@ def admin_audit():
 @app.route("/api/config")
 def get_config():
     return jsonify({
-        "supabaseUrl": SUPABASE_URL or "",
-        "supabaseAnonKey": os.environ.get("SUPABASE_ANON_KEY") or os.environ.get("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") or "",
+        "supabaseUrl": SUPABASE_URL,
+        "supabaseAnonKey": SUPABASE_ANON,
         "razorpayKeyId": RAZORPAY_KEY_ID
     })
 

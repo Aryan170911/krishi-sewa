@@ -23,14 +23,17 @@ const ORDERS_FILE = path.join(__dirname, "data", "orders.json");
 const PRODUCTS_FILE = path.join(__dirname, "data", "products.json");
 const IS_PROD = process.env.NODE_ENV === "production";
 
-// Supabase (supports both SUPABASE_* and NEXT_PUBLIC_* for StackHost)
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
+// Supabase (public anon key is safe to ship; service role stays env-only)
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "https://xypizzylruvgcglhyiyb.supabase.co";
+const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "sb_publishable_h4JTK-FhACGp3JDCvHMHPg_R50Q7G2PIq9wBpkMn_50Q";
+const SUPABASE_SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+// Use service role server-side if set, else anon (anon is enough for Auth + read, RLS enforced)
+const SUPABASE_KEY = SUPABASE_SERVICE || SUPABASE_ANON;
 let supabase = null;
 if (SUPABASE_URL && SUPABASE_KEY) {
   try {
     supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-    console.log(`[Supabase] Connected to ${SUPABASE_URL}`);
+    console.log(`[Supabase] Connected to ${SUPABASE_URL} as ${SUPABASE_SERVICE ? "service" : "anon"}`);
   } catch (e) { console.warn("[Supabase] init failed, falling back to JSON:", e.message); }
 } else {
   console.log("[Supabase] Not configured — using JSON files (data/*.json)");
@@ -230,8 +233,8 @@ app.get("/api/admin/audit", requireAdmin, (req, res) => {
 });
 app.get("/api/config", (req, res) => {
   res.json({
-    supabaseUrl: SUPABASE_URL || "",
-    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "",
+    supabaseUrl: SUPABASE_URL,
+    supabaseAnonKey: SUPABASE_ANON,
     razorpayKeyId: RAZORPAY_KEY_ID
   });
 });

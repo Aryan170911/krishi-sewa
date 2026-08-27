@@ -63,7 +63,8 @@ async function apiGet(path) {
   for (const base of bases) {
     try {
       const res = await fetch(`${base}${path}`, { credentials: "include" });
-      if (res.status === 401) { state.authUser = null; localStorage.removeItem("krishi_user"); }
+      // Only clear local auth on 401 from /auth/me itself (not from other endpoints)
+      if (res.status === 401 && path === "/auth/me") { state.authUser = null; localStorage.removeItem("krishi_user"); }
       if (!res.ok) throw new Error(`API ${res.status}`);
       if (base !== API_BASE) window.__krishi_api_base = base;
       return await res.json();
@@ -313,7 +314,7 @@ let activeEvents = mockEvents;
 let apiAvailable = false;
 
 async function syncFromBackend() {
-  const ordersPath = state.authUser?.email ? `/orders?email=${encodeURIComponent(state.authUser.email)}` : "/orders";
+  const ordersPath = "/orders";
   const [productsData, categoriesData, eventsData, ordersData, statesData] = await Promise.all([
     apiGet("/products"),
     apiGet("/categories"),
@@ -2385,6 +2386,12 @@ async function placeOrder() {
     showToast("Cart is empty");
     return;
   }
+  // Require login before checkout
+  if (!state.authUser?.email) {
+    showToast("Please log in to place an order");
+    navigateTo("auth");
+    return;
+  }
   // Prepare payload for backend
   const payload = {
     items: state.cart.map(item => ({ id: item.id, quantity: item.quantity })),
@@ -2398,49 +2405,20 @@ async function placeOrder() {
   if (btn) { btn.disabled = true; btn.innerHTML = `<span class="material-symbols-outlined animate-spin">progress_activity</span> Placing order...`; }
 
   try {
-    if (apiAvailable) {
-      const order = await apiPost("/orders", payload);
-      state.orders.push(order);
-      state.lastOrder = order;
-      saveOrders();
-      // Also try to sync orders list from backend to ensure consistency
-      const latest = await apiGet("/orders");
-      if (latest) { state.orders = latest; saveOrders(); state.lastOrder = order; }
-      showToast(`Order ${order.id} placed!`);
-    } else {
-      // Fallback: local-only order (original behavior)
-      const order = {
-        id: generateOrderId(),
-        date: new Date().toISOString(),
-        items: state.cart.map(item => {
-          const product = getProductById(item.id);
-          return {
-            id: item.id,
-            name: product?.name,
-            price: item.price,
-            quantity: item.quantity,
-            image: product?.image
-          };
-        }),
-        total: getCartTotal(),
-        address: state.billingAddress,
-        paymentMethod: state.paymentMethod,
-        status: 'processing'
-      };
-      state.orders.push(order);
-      state.lastOrder = order;
-      saveOrders();
-      showToast(`Order ${order.id} placed (offline)`);
+    if (!apiAvailable) {
+      throw new Error("Server unavailable. Please check your connection and try again.");
     }
+    const order = await apiPost("/orders", payload);
+    if (!order || order.error) throw new Error(order?.error || "Failed to place order");
+    state.orders.push(order);
+    state.lastOrder = order;
+    saveOrders();
+    // Also try to sync orders list from backend to ensure consistency
+    const latest = await apiGet("/orders");
+    if (Array.isArray(latest)) { state.orders = latest; saveOrders(); state.lastOrder = order; }
+    showToast(`Order ${order.id} placed!`);
     state.cart = [];
     saveCart();
-    // After successful order, if logged in, refresh orders from server so they sync across devices
-    if (state.authUser?.email) {
-      try {
-        const remote = await apiGet("/orders");
-        if (Array.isArray(remote)) { state.orders = remote; saveOrders(); }
-      } catch {}
-    }
     navigateTo('confirmation');
   } catch (e) {
     console.error("placeOrder failed:", e);

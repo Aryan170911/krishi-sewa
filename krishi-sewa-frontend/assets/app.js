@@ -39,6 +39,23 @@ function getApiBase() {
 }
 const API_BASE = getApiBase();
 
+// Toast notification (defined here so app.js works standalone without admin.js)
+function toast(msg) {
+  let host = document.getElementById("krishi-toast-host");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "krishi-toast-host";
+    host.className = "fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-[200] flex flex-col gap-2 pointer-events-none";
+    document.body.appendChild(host);
+  }
+  const el = document.createElement("div");
+  el.className = "bg-on-surface text-surface px-5 py-3 rounded-xl shadow-2xl text-sm font-semibold opacity-0 translate-y-2 transition-all duration-300 max-w-sm text-center";
+  el.textContent = msg;
+  host.appendChild(el);
+  requestAnimationFrame(() => { el.classList.remove("opacity-0", "translate-y-2"); el.classList.add("opacity-100", "translate-y-0"); });
+  setTimeout(() => { el.classList.add("opacity-0", "translate-y-2"); setTimeout(() => el.remove(), 350); }, 3000);
+}
+
 // API helpers with graceful fallback + auto retry on 3001 if 3000 fails
 async function apiGet(path) {
   const bases = [API_BASE];

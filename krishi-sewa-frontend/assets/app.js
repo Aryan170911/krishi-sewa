@@ -422,25 +422,43 @@ function getCartTotal() {
   return subtotal - discount + shipping;
 }
 
+// ============================================
+// LOCAL STORAGE — minimal cache only
+// Cart and orders are SERVER-SOURCE-OF-TRUTH.
+// LocalStorage is only used for: auth user, last viewed product, UI prefs.
+// On login: pull fresh from server. On any action: push to server immediately.
+// ============================================
 function saveCart() {
-  localStorage.setItem("krishi_sewa_cart", JSON.stringify(state.cart));
+  // Cart lives on the server (POST/PUT /api/cart). We keep an in-memory copy only.
+  // The server is hit on every cart change. No offline persistence.
+  if (state.authUser?.email && apiAvailable) {
+    // Fire and forget — server is source of truth
+    fetch(`${API_BASE}/cart`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ items: state.cart })
+    }).catch(e => console.warn("saveCart sync failed:", e.message));
+  }
 }
 
 function loadCart() {
-  const saved = localStorage.getItem("krishi_sewa_cart");
-  if (saved) {
-    state.cart = JSON.parse(saved);
+  // Cart is fetched from /api/cart on login (see syncServerCartOnLogin).
+  // No localStorage fallback — empty cart if not logged in.
+  if (!state.authUser?.email) {
+    state.cart = [];
   }
 }
 
 function saveOrders() {
-  localStorage.setItem("krishi_sewa_orders", JSON.stringify(state.orders));
+  // Orders live on the server. We cache in-memory only.
+  // No localStorage writes — server is source of truth.
 }
 
 function loadOrders() {
-  const saved = localStorage.getItem("krishi_sewa_orders");
-  if (saved) {
-    state.orders = JSON.parse(saved);
+  // Orders are fetched from /api/orders. No localStorage fallback.
+  if (!state.authUser?.email) {
+    state.orders = [];
   }
 }
 
@@ -2369,6 +2387,12 @@ function closeMobileMenu() {
 function addToCart(productId, quantity = 1) {
   const product = getProductById(productId);
   if (!product || !product.inStock) return;
+  // Require login for cart
+  if (!state.authUser?.email) {
+    showToast("Please log in to add to cart");
+    navigateTo("auth");
+    return;
+  }
 
   const existingItem = state.cart.find(item => item.id === productId);
   if (existingItem) {
@@ -2376,13 +2400,15 @@ function addToCart(productId, quantity = 1) {
   } else {
     state.cart.push({
       id: productId,
-      quantity: quantity,
+      name: product.name,
       price: product.price,
+      image: product.image,
+      quantity: quantity,
       addedAt: new Date().toISOString()
     });
   }
 
-  saveCart();
+  saveCart();  // pushes to server
   renderApp();
 
   // Show feedback
@@ -2668,16 +2694,6 @@ async function placeOrder() {
   // Save address if user checked the box
   await saveAddressFromCheckout();
 
-  // Sync cart to server before placing order
-  try {
-    await fetch(`${API_BASE}/cart`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ items: state.cart })
-    });
-  } catch {}
-
   // Disable button feedback
   const btn = document.querySelector('button[onclick="placeOrder()"]');
   const originalText = btn ? btn.innerHTML : "";
@@ -2687,19 +2703,26 @@ async function placeOrder() {
     if (!apiAvailable) {
       throw new Error("Server unavailable. Please check your connection and try again.");
     }
+    // Force-final sync of cart to server before placing order
+    try {
+      await fetch(`${API_BASE}/cart`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ items: state.cart })
+      });
+    } catch {}
     const order = await apiPost("/orders", payload);
     if (!order || order.error) throw new Error(order?.error || "Failed to place order");
-    state.orders.push(order);
     state.lastOrder = order;
-    saveOrders();
-    // Also try to sync orders list from backend to ensure consistency
+    // Pull fresh orders from server (authoritative)
     const latest = await apiGet("/orders");
-    if (Array.isArray(latest)) { state.orders = latest; saveOrders(); state.lastOrder = order; }
+    if (Array.isArray(latest)) state.orders = latest;
     showToast(`Order ${order.id} placed!`);
+    // Clear local + server cart
     state.cart = [];
-    saveCart();
-    // Clear server cart
-    try { await fetch(`${API_BASE}/cart`, { method: 'DELETE', credentials: 'include' }); } catch {}
+    try { await fetch(`${API_BASE}/cart`, { method: "DELETE", credentials: "include" }); } catch {}
+    renderApp();
     navigateTo('confirmation');
   } catch (e) {
     console.error("placeOrder failed:", e);

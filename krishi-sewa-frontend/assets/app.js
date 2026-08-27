@@ -1,6 +1,6 @@
 /**
- * Krishi Sewa Foundation - Frontend + Backend + Email OTP (Resend)
- * OTP flow: enter email -> server sends 6-digit code -> verify -> session cookie
+ * Krishi Sewa Foundation - Frontend
+ * Auth: secure email-based login (no passwords, single-use code to inbox)
  */
 let authConfig = null;
 let authConfigError = null;
@@ -372,7 +372,7 @@ const state = {
   isCartSidebarOpen: false,
   priceRange: "all",
   authUser: JSON.parse(localStorage.getItem("krishi_user") || "null"),
-  authMode: "login", // login | signup | otp | reset
+  authMode: "login", // login | signup | otp | forgot
   authPendingEmail: "",
   authPendingName: ""
 };
@@ -586,7 +586,7 @@ function renderMobileDrawer() {
             </button>
           ` : `
             <button class="w-full bg-primary text-on-primary font-label-md text-label-md min-h-[48px] rounded-xl hover:bg-primary-container transition-colors flex items-center justify-center gap-2" onclick="navigateTo('auth'); closeMobileMenu()">
-              <span class="material-symbols-outlined">login</span> Login / Signup (OTP)
+              <span class="material-symbols-outlined">login</span> Login / Sign Up
             </button>
           `}
         </div>
@@ -1781,9 +1781,9 @@ function renderAboutPage() {
       </section>
 
       <section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 mb-section-gap">
-        <h3 class="font-headline-md text-headline-md text-primary mb-2 flex items-center gap-2"><span class="material-symbols-outlined">mail</span> Stay Updated — OTP Protected</h3>
-        <p class="text-body-md text-on-surface-variant mb-3">Create account with email OTP for signup & password reset. Powered by Supabase Auth (same DB as orders).</p>
-        <button onclick="navigateTo('auth')" class="bg-primary text-on-primary px-6 py-2.5 rounded-lg font-semibold">Create Account / Login with OTP</button>
+        <h3 class="font-headline-md text-headline-md text-primary mb-2 flex items-center gap-2"><span class="material-symbols-outlined">mail</span> Stay Updated</h3>
+        <p class="text-body-md text-on-surface-variant mb-3">Create a free account for order tracking, exclusive offers, and seed festival invites. Your email is safe with us.</p>
+        <button onclick="navigateTo('auth')" class="bg-primary text-on-primary px-6 py-2.5 rounded-lg font-semibold">Create Free Account</button>
       </section>
 
       <section class="bg-primary-container rounded-2xl p-8 md:p-16 text-center">
@@ -1812,9 +1812,8 @@ function renderAuthPage() {
     <main class="flex-grow w-full max-w-md mx-auto px-4 py-12 text-center">
       <div class="bg-white border border-outline-variant rounded-2xl p-8">
         <span class="material-symbols-outlined text-primary text-5xl">verified_user</span>
-        <h1 class="text-2xl font-bold text-primary mt-3">Welcome, ${user.email}</h1>
-        <p class="text-on-surface-variant mt-2">You are logged in via Supabase OTP. Your orders will be linked to this email.</p>
-        <p class="text-xs text-on-surface-variant mt-2 break-all">ID: ${user.id}</p>
+        <h1 class="text-2xl font-bold text-primary mt-3">Welcome, ${user.name || user.email}</h1>
+        <p class="text-on-surface-variant mt-2">You're signed in securely. Your orders will be linked to <b>${user.email}</b>.</p>
         <button onclick="handleLogout()" class="mt-6 w-full bg-primary text-on-primary py-3 rounded-lg font-semibold">Logout</button>
         <button onclick="navigateTo('shop')" class="mt-3 w-full border border-outline-variant py-3 rounded-lg font-semibold">Continue Shopping</button>
       </div>
@@ -1824,50 +1823,55 @@ function renderAuthPage() {
   return `
   <main class="flex-grow w-full max-w-md mx-auto px-4 py-8">
     <div class="bg-white border border-outline-variant rounded-2xl p-6">
-      <h1 class="text-2xl font-bold text-primary text-center">Account</h1>
-      <p class="text-center text-on-surface-variant text-sm mb-6">Secure login with <b>6-digit email code</b></p>
+      <h1 class="text-2xl font-bold text-primary text-center">${mode==="signup" ? "Create Account" : "Welcome back"}</h1>
+      <p class="text-center text-on-surface-variant text-sm mb-6">${mode==="signup" ? "Join Krishi Sewa — secure, no password needed" : "Sign in to your account"}</p>
       <div class="flex gap-2 mb-6">
-        ${["login","signup","otp","reset"].map(m=>`
-          <button onclick="state.authMode='${m}'; state.authPendingEmail=''; renderApp()" class="flex-1 py-2 rounded-lg text-sm font-bold ${mode===m?'bg-primary text-on-primary':'bg-surface-variant text-on-surface-variant'}">${m.toUpperCase()}</button>
-        `).join("")}
+        <button onclick="state.authMode='login'; state.authPendingEmail=''; renderApp()" class="flex-1 py-2.5 rounded-lg text-sm font-bold ${mode!=='signup' && mode!=='forgot' ?'bg-primary text-on-primary':'bg-surface-variant text-on-surface-variant'}">Log In</button>
+        <button onclick="state.authMode='signup'; state.authPendingEmail=''; renderApp()" class="flex-1 py-2.5 rounded-lg text-sm font-bold ${mode==='signup'?'bg-primary text-on-primary':'bg-surface-variant text-on-surface-variant'}">Sign Up</button>
       </div>
-      ${mode==="login" ? `
-        <form onsubmit="handleLogin(event)" class="space-y-3">
+      ${mode==="forgot" ? `
+        <form onsubmit="handleResetSend(event)" class="space-y-3">
+          <p class="text-sm text-on-surface-variant text-center">Enter your email — we'll send a secure code to get you back in.</p>
           <input id="authEmail" type="email" required placeholder="Your email" value="${state.authPendingEmail||''}" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Send Login Code</button>
+          <button type="submit" class="w-full bg-accent-ochre text-white py-3 rounded-lg font-bold">Send Recovery Code</button>
           <p id="authMsg" class="text-center text-sm"></p>
+          <button type="button" onclick="state.authMode='login'; renderApp()" class="w-full text-sm text-on-surface-variant hover:text-primary">← Back to login</button>
         </form>
       ` : mode==="signup" ? `
         <form onsubmit="handleSignup(event)" class="space-y-3">
           <input id="authName" placeholder="Full name" class="w-full border border-outline-variant rounded-lg px-3 py-3">
           <input id="authEmail" type="email" required placeholder="Your email" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Create Account — Send Code</button>
+          <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Create Account</button>
           <p id="authMsg" class="text-center text-sm"></p>
+          <p class="text-center text-xs text-on-surface-variant">We'll email you a secure code to verify — no password needed.</p>
         </form>
       ` : mode==="otp" ? `
         <div class="space-y-3">
+          <p class="text-sm text-on-surface-variant text-center">We sent a code to <b class="text-primary">${state.authPendingEmail||'your email'}</b></p>
           <input id="authEmail" type="email" required placeholder="Your email" value="${state.authPendingEmail||''}" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <button onclick="(async()=>{const e=document.getElementById('authEmail').value.trim(); if(e){await apiPost('/auth/send-otp',{email:e});toast('OTP sent to '+e);}})()" class="w-full border border-outline-variant py-2.5 rounded-lg font-semibold">Resend Code</button>
-          <input id="authCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="Enter 6-digit code" class="w-full text-center text-2xl tracking-[0.5em] font-bold border-2 border-primary rounded-lg px-3 py-4">
-          <button type="button" onclick="handleOtpVerify()" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Verify & Login</button>
+          <button onclick="(async()=>{const e=document.getElementById('authEmail').value.trim(); if(e){const r=await apiPost('/auth/send-otp',{email:e}); if(!r.error){state.authPendingEmail=e; toast('Code sent to '+e);}}})()" class="w-full border border-outline-variant py-2.5 rounded-lg font-semibold">Resend Code</button>
+          <input id="authCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000" class="w-full text-center text-2xl tracking-[0.5em] font-bold border-2 border-primary rounded-lg px-3 py-4">
+          <button type="button" onclick="handleOtpVerify()" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Verify & Continue</button>
           <p id="authMsg" class="text-center text-sm"></p>
         </div>
-      `       : `
-        <form onsubmit="handleResetSend(event)" class="space-y-3">
-          <input id="authEmail" type="email" required placeholder="Your email" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <button type="submit" class="w-full bg-accent-ochre text-white py-3 rounded-lg font-bold">Send Reset Code</button>
-          <p id="authMsg" class="text-center text-sm text-on-surface-variant">We'll email a 6-digit code — verify to continue</p>
+      ` : `
+        <form onsubmit="handleLogin(event)" class="space-y-3">
+          <input id="authEmail" type="email" required placeholder="Your email" value="${state.authPendingEmail||''}" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Send Login Code</button>
+          <p id="authMsg" class="text-center text-sm"></p>
+          <div class="text-center">
+            <button type="button" onclick="state.authMode='forgot'; state.authPendingEmail=document.getElementById('authEmail')?.value||''; renderApp()" class="text-sm text-primary hover:underline font-semibold">Forgot password?</button>
+          </div>
         </form>
       `}
       ${authConfigError ? `
         <div class="mt-4 p-3 bg-error-container text-on-error-container rounded-lg text-xs">
-          <b>Config issue:</b> ${authConfigError}
+          <b>Setup pending.</b> Please try again in a moment.
           <button onclick="(async()=>{authConfigError=null;await initAuth();renderApp();})()" class="ml-2 underline font-bold">Retry</button>
         </div>` : (authConfig && !authConfig.emailEnabled) ? `
         <div class="mt-4 p-3 bg-error-container text-on-error-container rounded-lg text-xs">
-          <b>Email not configured on server.</b> Set <code>RESEND_API_KEY</code> env var on Render and redeploy.
+          <b>Email service is being set up.</b> Please try again shortly.
         </div>` : ""}
-      <p class="text-center text-xs text-on-surface-variant mt-4">Email OTP via Resend • 6-digit code • Session cookie • No password stored</p>
     </div>
   </main>`;
 }

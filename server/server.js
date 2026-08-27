@@ -104,6 +104,23 @@ app.use(express.static(frontendPath, {
   }
 }));
 
+// ============================================
+// Helpers for new DB tables
+// ============================================
+function hashToken(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+function newSecureToken(len = 32) {
+  return crypto.randomBytes(len).toString("base64url");
+}
+function newOrderEvent(orderId, eventType, actorEmail, actorType, details) {
+  if (!supabase) return;
+  return supabase.from("order_events").insert({
+    order_id: orderId, event_type: eventType, actor_email: actorEmail || null,
+    actor_type: actorType || "system", details: details || {}, created_at: new Date().toISOString()
+  }).then(() => {}).catch(e => console.warn("[Supabase] order_event:", e.message));
+}
+
 // ============ Helpers for persistence ============
 function ensureDataDir() { try { fs.mkdirSync(path.dirname(ORDERS_FILE), { recursive: true }); } catch {} }
 function loadOrders() {
@@ -949,6 +966,523 @@ app.post("/api/payment/razorpay/verify", (req, res) => {
   }
 });
 
+// ============================================
+// USER ADDRESSES — saved shipping addresses
+// ============================================
+app.get("/api/addresses", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.json([]);
+  const { data, error } = await supabase.from("user_addresses").select("*").eq("user_email", sess.email).is("deleted_at", null).order("is_default", { ascending: false });
+  if (error) { console.warn("[Supabase] addresses list:", error.message); return res.status(500).json({ error: error.message }); }
+  res.json(data || []);
+});
+
+app.post("/api/addresses", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  const a = req.body || {};
+  if (!a.fullName || !a.phone || !a.addressLine1 || !a.district || !a.state || !a.pincode) return res.status(400).json({ error: "Missing required fields" });
+  if (!/^\d{10}$/.test(String(a.phone).replace(/\D/g, ""))) return res.status(400).json({ error: "Phone must be 10 digits" });
+  if (!/^\d{6}$/.test(String(a.pincode))) return res.status(400).json({ error: "Pincode must be 6 digits" });
+  if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+  // If this is set as default, unset other defaults first
+  if (a.isDefault) {
+    await supabase.from("user_addresses").update({ is_default: false }).eq("user_email", sess.email).eq("is_default", true);
+  }
+  const { data, error } = await supabase.from("user_addresses").insert({
+    user_email: sess.email,
+    label: a.label || "Home",
+    full_name: a.fullName, phone: a.phone,
+    address_line1: a.addressLine1, address_line2: a.addressLine2 || null,
+    landmark: a.landmark || null, city: a.city || null,
+    district: a.district, state: a.state, pincode: a.pincode,
+    is_default: !!a.isDefault
+  }).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json(data);
+});
+
+app.put("/api/addresses/:id", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+  const id = req.params.id;
+  // Verify ownership
+  const own = await supabase.from("user_addresses").select("user_email").eq("id", id).maybeSingle();
+  if (!own.data || own.data.user_email !== sess.email) return res.status(403).json({ error: "Forbidden" });
+  if (req.body.isDefault) {
+    await supabase.from("user_addresses").update({ is_default: false }).eq("user_email", sess.email).eq("is_default", true);
+  }
+  const { data, error } = await supabase.from("user_addresses").update({
+    label: req.body.label, full_name: req.body.fullName, phone: req.body.phone,
+    address_line1: req.body.addressLine1, address_line2: req.body.addressLine2,
+    landmark: req.body.landmark, city: req.body.city,
+    district: req.body.district, state: req.body.state, pincode: req.body.pincode,
+    is_default: !!req.body.isDefault
+  }).eq("id", id).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.delete("/api/addresses/:id", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+  const own = await supabase.from("user_addresses").select("user_email").eq("id", id).maybeSingle();
+  if (!own.data || own.data.user_email !== sess.email) return res.status(403).json({ error: "Forbidden" });
+  const { error } = await supabase.from("user_addresses").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
+});
+
+// ============================================
+// USER CARTS — server-side cart
+// ============================================
+app.get("/api/cart", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.json({ items: [] });
+  const { data, error } = await supabase.from("user_carts").select("*").eq("user_email", sess.email).maybeSingle();
+  if (error) { console.warn("[Supabase] cart get:", error.message); return res.status(500).json({ error: error.message }); }
+  res.json(data || { items: [] });
+});
+
+app.put("/api/cart", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+  const items = Array.isArray(req.body?.items) ? req.body.items : [];
+  if (items.length > 50) return res.status(400).json({ error: "Cart too large" });
+  const { data, error } = await supabase.from("user_carts").upsert({
+    user_email: sess.email, items, updated_at: new Date().toISOString()
+  }, { onConflict: "user_email" }).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.delete("/api/cart", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.json({ ok: true });
+  await supabase.from("user_carts").delete().eq("user_email", sess.email);
+  res.json({ ok: true });
+});
+
+// ============================================
+// USER WISHLIST — saved products
+// ============================================
+app.get("/api/wishlist", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.json([]);
+  const { data, error } = await supabase.from("user_wishlist").select("product_id, created_at").eq("user_email", sess.email).order("created_at", { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+});
+
+app.post("/api/wishlist/:productId", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+  const productId = parseInt(req.params.productId);
+  if (!productId) return res.status(400).json({ error: "Invalid product ID" });
+  const { data, error } = await supabase.from("user_wishlist").insert({
+    user_email: sess.email, product_id: productId
+  }).select().single();
+  if (error && error.code === "23505") return res.json({ ok: true, already: true });
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json(data);
+});
+
+app.delete("/api/wishlist/:productId", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.json({ ok: true });
+  const productId = parseInt(req.params.productId);
+  await supabase.from("user_wishlist").delete().eq("user_email", sess.email).eq("product_id", productId);
+  res.json({ ok: true });
+});
+
+// ============================================
+// PASSWORD RESET — token-based secure flow
+// ============================================
+app.post("/api/auth/password-reset/request", async (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Valid email required" });
+    if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+    const user = await findUser(email);
+    if (!user) return res.status(404).json({ error: "No account with this email" });
+    // Generate secure token
+    const token = newSecureToken(32);
+    const tokenHash = hashToken(token);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+    await supabase.from("password_reset_tokens").insert({
+      user_email: email, token_hash: tokenHash, expires_at: expiresAt,
+      ip_address: req.ip, user_agent: req.headers["user-agent"]
+    });
+    // In production, send email with link. For now, log + return token in dev
+    console.log(`[Password reset] ${email} -> ${token}`);
+    res.json({ ok: true, message: "Reset link sent", token: IS_PROD ? undefined : token });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/auth/password-reset/confirm", async (req, res) => {
+  try {
+    const token = String(req.body?.token || "");
+    const newPassword = String(req.body?.newPassword || "");
+    if (!token) return res.status(400).json({ error: "Token required" });
+    if (!validatePassword(newPassword)) return res.status(400).json({ error: "Password must be 8+ chars with letter and number" });
+    if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+    const tokenHash = hashToken(token);
+    const { data: row, error } = await supabase.from("password_reset_tokens").select("*").eq("token_hash", tokenHash).maybeSingle();
+    if (error || !row) return res.status(400).json({ error: "Invalid or expired token" });
+    if (row.used_at) return res.status(400).json({ error: "Token already used" });
+    if (new Date(row.expires_at) < new Date()) return res.status(400).json({ error: "Token expired" });
+    // Update password
+    const hash = hashPassword(newPassword);
+    const { error: upErr } = await supabase.from("users").update({ password_hash: hash, failed_login_count: 0, locked_until: null }).eq("email", row.user_email);
+    if (upErr) return res.status(500).json({ error: upErr.message });
+    // Mark token as used
+    await supabase.from("password_reset_tokens").update({ used_at: new Date().toISOString() }).eq("id", row.id);
+    // Revoke all sessions for this user
+    await supabase.from("user_sessions").update({ revoked_at: new Date().toISOString() }).eq("user_email", row.user_email).is("revoked_at", null);
+    logAudit("password:reset", { email: row.user_email, via: "token" }, req.ip);
+    res.json({ ok: true, message: "Password updated. Please log in again." });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ============================================
+// EMAIL VERIFICATION — secure token flow
+// ============================================
+app.post("/api/auth/email-verify/request", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+  const token = newSecureToken(24);
+  const tokenHash = hashToken(token);
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24h
+  await supabase.from("email_verification_tokens").insert({
+    user_email: sess.email, token_hash: tokenHash, expires_at: expiresAt
+  });
+  console.log(`[Email verify] ${sess.email} -> ${token}`);
+  res.json({ ok: true, token: IS_PROD ? undefined : token });
+});
+
+app.post("/api/auth/email-verify/confirm", async (req, res) => {
+  const token = String(req.body?.token || "");
+  if (!token) return res.status(400).json({ error: "Token required" });
+  if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+  const tokenHash = hashToken(token);
+  const { data: row, error } = await supabase.from("email_verification_tokens").select("*").eq("token_hash", tokenHash).maybeSingle();
+  if (error || !row) return res.status(400).json({ error: "Invalid token" });
+  if (row.used_at) return res.status(400).json({ error: "Already verified" });
+  if (new Date(row.expires_at) < new Date()) return res.status(400).json({ error: "Token expired" });
+  await supabase.from("users").update({ email_verified: true, email_verified_at: new Date().toISOString() }).eq("email", row.user_email);
+  await supabase.from("email_verification_tokens").update({ used_at: new Date().toISOString() }).eq("id", row.id);
+  res.json({ ok: true, message: "Email verified" });
+});
+
+// ============================================
+// SUPPORT: TYPING INDICATORS
+// ============================================
+app.post("/api/support/chat/:id/typing", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.json({ ok: true });
+  const chatId = parseInt(req.params.id);
+  // Verify ownership
+  const c = await supabase.from("support_chats").select("user_email").eq("id", chatId).maybeSingle();
+  if (!c.data || c.data.user_email !== sess.email) return res.status(403).json({ error: "Not your chat" });
+  await supabase.from("support_typing").upsert({
+    chat_id: chatId, user_email: sess.email,
+    is_typing: !!req.body?.isTyping, updated_at: new Date().toISOString()
+  }, { onConflict: "chat_id,user_email" });
+  res.json({ ok: true });
+});
+
+app.post("/api/admin/support/chat/:id/typing", requireAdminAuth, async (req, res) => {
+  if (!supabase) return res.json({ ok: true });
+  const chatId = parseInt(req.params.id);
+  await supabase.from("support_typing").upsert({
+    chat_id: chatId, user_email: req.adminSession.email,
+    is_typing: !!req.body?.isTyping, updated_at: new Date().toISOString()
+  }, { onConflict: "chat_id,user_email" });
+  res.json({ ok: true });
+});
+
+app.get("/api/admin/support/chat/:id/typing", requireAdminAuth, async (req, res) => {
+  if (!supabase) return res.json({ typing: [] });
+  const chatId = parseInt(req.params.id);
+  const cutoff = new Date(Date.now() - 10 * 1000).toISOString(); // 10s
+  const { data, error } = await supabase.from("support_typing")
+    .select("user_email, is_typing, updated_at")
+    .eq("chat_id", chatId)
+    .eq("is_typing", true)
+    .gt("updated_at", cutoff);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ typing: data || [] });
+});
+
+// ============================================
+// SUPPORT: READ RECEIPTS
+// ============================================
+app.post("/api/support/chat/:id/read", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.json({ ok: true });
+  const chatId = parseInt(req.params.id);
+  const c = await supabase.from("support_chats").select("user_email").eq("id", chatId).maybeSingle();
+  if (!c.data || c.data.user_email !== sess.email) return res.status(403).json({ error: "Not your chat" });
+  await supabase.from("support_read_receipts").upsert({
+    chat_id: chatId, reader_type: "user", reader_email: sess.email,
+    last_read_message_id: req.body?.lastReadMessageId || null, read_at: new Date().toISOString()
+  }, { onConflict: "chat_id,reader_type" });
+  await supabase.from("support_chats").update({ unread_for_user: 0 }).eq("id", chatId);
+  res.json({ ok: true });
+});
+
+app.post("/api/admin/support/chat/:id/read", requireAdminAuth, async (req, res) => {
+  if (!supabase) return res.json({ ok: true });
+  const chatId = parseInt(req.params.id);
+  await supabase.from("support_read_receipts").upsert({
+    chat_id: chatId, reader_type: "admin", reader_email: req.adminSession.email,
+    last_read_message_id: req.body?.lastReadMessageId || null, read_at: new Date().toISOString()
+  }, { onConflict: "chat_id,reader_type" });
+  await supabase.from("support_chats").update({ unread_for_admin: 0 }).eq("id", chatId);
+  res.json({ ok: true });
+});
+
+// ============================================
+// SUPPORT: ASSIGN CHAT TO ADMIN
+// ============================================
+app.post("/api/admin/support/chat/:id/assign", requireAdminAuth, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+  const chatId = parseInt(req.params.id);
+  const { data: chat, error } = await supabase.from("support_chats").update({
+    assigned_admin_email: req.adminSession.email, status: "assigned"
+  }).eq("id", chatId).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  // Log assignment
+  await supabase.from("support_assignments").insert({
+    chat_id: chatId, admin_email: req.adminSession.email
+  });
+  // System message
+  await supabase.from("support_messages").insert({
+    chat_id: chatId, sender_type: "system", sender_email: req.adminSession.email,
+    sender_name: "System", message: `Assigned to ${req.adminSession.name || req.adminSession.email}`,
+    created_at: new Date().toISOString()
+  });
+  logAdminActivity(req.adminSession.email, "chat_assign", chat.user_email, { chat_id: chatId });
+  res.json(chat);
+});
+
+app.post("/api/admin/support/chat/:id/unassign", requireAdminAuth, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+  const chatId = parseInt(req.params.id);
+  const { data, error } = await supabase.from("support_chats").update({
+    assigned_admin_email: null, status: "open"
+  }).eq("id", chatId).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  // Close old assignment
+  await supabase.from("support_assignments").update({ unassigned_at: new Date().toISOString() }).eq("chat_id", chatId).is("unassigned_at", null);
+  res.json(data);
+});
+
+// ============================================
+// ORDER EVENTS — status history
+// ============================================
+app.get("/api/orders/:id/events", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.json([]);
+  const orderId = decodeURIComponent(req.params.id);
+  // Verify ownership or admin
+  const o = await supabase.from("orders").select("email").eq("id", orderId).maybeSingle();
+  if (!o.data) return res.status(404).json({ error: "Order not found" });
+  if (o.data.email !== sess.email) {
+    // Allow admin
+    const adm = getAdminSession(req);
+    if (!adm) return res.status(403).json({ error: "Forbidden" });
+  }
+  const { data, error } = await supabase.from("order_events").select("*").eq("order_id", orderId).order("created_at", { ascending: true });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+});
+
+// ============================================
+// SEARCH — full-text product search
+// ============================================
+app.get("/api/search", async (req, res) => {
+  if (!supabase) {
+    // Fallback to in-memory
+    const q = (req.query.q || "").toLowerCase();
+    return res.json(products.filter(p => p.name.toLowerCase().includes(q) || (p.tags || []).some(t => t.toLowerCase().includes(q))).slice(0, 30));
+  }
+  const q = String(req.query.q || "").trim();
+  if (q.length < 2) return res.json([]);
+  const { data, error } = await supabase.rpc("search_products", { query_text: q, max_results: 30 });
+  if (error) {
+    // Fallback to simple ILIKE
+    const { data: d2, error: e2 } = await supabase.from("products")
+      .select("id, name, short_description, price, image, category, in_stock")
+      .or(`name.ilike.%${q}%,short_description.ilike.%${q}%,description.ilike.%${q}%`)
+      .eq("in_stock", true).is("deleted_at", null).limit(30);
+    if (e2) return res.status(500).json({ error: e2.message });
+    return res.json(d2 || []);
+  }
+  res.json(data || []);
+});
+
+// ============================================
+// ADMIN DASHBOARD STATS (from view)
+// ============================================
+app.get("/api/admin/stats/full", requireAdmin, async (req, res) => {
+  if (!supabase) return res.json({ message: "DB unavailable" });
+  const { data, error } = await supabase.from("admin_dashboard_stats").select("*").maybeSingle();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// ============================================
+// WEBHOOKS — admin can register endpoints
+// ============================================
+app.get("/api/admin/webhooks", requireAdmin, async (req, res) => {
+  if (!supabase) return res.json([]);
+  const { data, error } = await supabase.from("webhooks").select("id, url, events, active, last_triggered_at, failure_count, created_at").order("created_at", { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+});
+
+app.post("/api/admin/webhooks", requireAdmin, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+  const { url, events, secret } = req.body || {};
+  if (!url || !Array.isArray(events) || events.length === 0) return res.status(400).json({ error: "url and events[] required" });
+  const { data, error } = await supabase.from("webhooks").insert({
+    url, events, secret: secret || newSecureToken(16), active: true,
+    created_by: req.adminEmail || "admin"
+  }).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json(data);
+});
+
+app.delete("/api/admin/webhooks/:id", requireAdmin, async (req, res) => {
+  if (!supabase) return res.json({ ok: true });
+  await supabase.from("webhooks").update({ active: false }).eq("id", req.params.id);
+  res.json({ ok: true });
+});
+
+// Helper: fire webhooks for an event (called by order creation etc.)
+async function fireWebhooks(event, payload) {
+  if (!supabase) return;
+  try {
+    const { data: hooks } = await supabase.from("webhooks").select("id, url, secret, events").eq("active", true).contains("events", [event]);
+    if (!hooks) return;
+    for (const h of hooks) {
+      const body = JSON.stringify({ event, payload, timestamp: new Date().toISOString() });
+      const sig = crypto.createHmac("sha256", h.secret).update(body).digest("hex");
+      const start = Date.now();
+      let respStatus = 0, respBody = "", success = false, error = null;
+      try {
+        const r = await fetch(h.url, { method: "POST", headers: { "Content-Type": "application/json", "X-Krishi-Signature": sig }, body, signal: AbortSignal.timeout(10000) });
+        respStatus = r.status;
+        respBody = (await r.text()).substring(0, 500);
+        success = r.ok;
+      } catch (e) { error = e.message; }
+      const duration = Date.now() - start;
+      await supabase.from("webhook_deliveries").insert({
+        webhook_id: h.id, event, payload, response_status: respStatus,
+        response_body: respBody, duration_ms: duration, success, error
+      });
+    }
+  } catch (e) { console.warn("[Webhook] fireWebhooks:", e.message); }
+}
+
+// ============================================
+// API KEYS — programmatic admin access
+// ============================================
+app.get("/api/admin/api-keys", requireAdmin, async (req, res) => {
+  if (!supabase) return res.json([]);
+  const { data, error } = await supabase.from("api_keys").select("id, name, key_prefix, scope, last_used_at, expires_at, revoked_at, created_at").order("created_at", { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+});
+
+app.post("/api/admin/api-keys", requireAdmin, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+  const { name, scope, expiresInDays } = req.body || {};
+  if (!name) return res.status(400).json({ error: "name required" });
+  const key = "ks_live_" + newSecureToken(24);
+  const keyHash = hashToken(key);
+  const keyPrefix = key.substring(0, 12);
+  const expiresAt = expiresInDays ? new Date(Date.now() + expiresInDays * 86400 * 1000).toISOString() : null;
+  const { data, error } = await supabase.from("api_keys").insert({
+    name, key_hash: keyHash, key_prefix: keyPrefix, scope: scope || "read",
+    created_by: req.adminEmail || "admin", expires_at: expiresAt
+  }).select("id, name, key_prefix, scope, expires_at, created_at").single();
+  if (error) return res.status(500).json({ error: error.message });
+  // Return the full key ONLY on creation
+  res.status(201).json({ ...data, key });
+});
+
+app.delete("/api/admin/api-keys/:id", requireAdmin, async (req, res) => {
+  if (!supabase) return res.json({ ok: true });
+  await supabase.from("api_keys").update({ revoked_at: new Date().toISOString() }).eq("id", req.params.id);
+  res.json({ ok: true });
+});
+
+// ============================================
+// USER PREFERENCES — notification settings
+// ============================================
+app.get("/api/preferences", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.json({});
+  const { data, error } = await supabase.from("user_preferences").select("*").eq("user_email", sess.email).maybeSingle();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || { user_email: sess.email });
+});
+
+app.put("/api/preferences", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+  const allowed = ["email_order_updates", "email_promotions", "email_support_replies", "sms_order_updates", "language", "theme", "currency"];
+  const patch = {};
+  for (const k of allowed) {
+    if (req.body[k] !== undefined) patch[k] = req.body[k];
+  }
+  const { data, error } = await supabase.from("user_preferences").upsert({
+    user_email: sess.email, ...patch, updated_at: new Date().toISOString()
+  }, { onConflict: "user_email" }).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// ============================================
+// SESSIONS — list & revoke user's devices
+// ============================================
+app.get("/api/sessions", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.json([]);
+  const { data, error } = await supabase.from("user_sessions").select("id, device_info, ip_address, last_active_at, created_at, expires_at")
+    .eq("user_email", sess.email).is("revoked_at", null).gt("expires_at", new Date().toISOString())
+    .order("last_active_at", { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+});
+
+app.delete("/api/sessions/:id", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (!supabase) return res.json({ ok: true });
+  await supabase.from("user_sessions").update({ revoked_at: new Date().toISOString() })
+    .eq("id", req.params.id).eq("user_email", sess.email);
+  res.json({ ok: true });
+});
+
 // Products - with filtering (public)
 app.get("/api/products", (req, res) => {
   let result = [...products];
@@ -1201,6 +1735,8 @@ app.post("/api/orders", orderLimiter, async (req, res) => {
     saveOrders(orders);
   }
   logAudit("order:create", { id: order.id, email: session?.email, total, source: supabase ? "supabase" : "json" }, req.ip);
+  newOrderEvent(order.id, "created", session?.email, "user", { total, paymentMethod });
+  fireWebhooks("order.created", { id: order.id, email: order.email, total, status: order.status });
   res.status(201).json(order);
 });
 app.put("/api/orders/:id/status", requireAdmin, async (req, res) => {
@@ -1213,6 +1749,8 @@ app.put("/api/orders/:id/status", requireAdmin, async (req, res) => {
       const { data, error } = await supabase.from("orders").update({ status }).eq("id", id).select().single();
       if (!error && data) {
         logAudit("order:status", { id, status }, req.ip);
+        newOrderEvent(id, status, req.adminEmail, "admin", { from: data.status });
+        fireWebhooks(`order.${status}`, { id, status });
         return res.json({ id: data.id, status: data.status });
       }
       if (error && error.code !== "PGRST116") console.warn("[Supabase] order status error:", error.message);
@@ -1221,9 +1759,11 @@ app.put("/api/orders/:id/status", requireAdmin, async (req, res) => {
   const orders = loadOrders();
   const order = orders.find(o => o.id === id || o.id === "#" + id || o.id.replace("#","") === id.replace("#",""));
   if (!order) return res.status(404).json({ error: "Order not found" });
+  const oldStatus = order.status;
   order.status = status;
   saveOrders(orders);
   logAudit("order:status", { id, status }, req.ip);
+  newOrderEvent(id, status, req.adminEmail, "admin", { from: oldStatus });
   res.json(order);
 });
 app.delete("/api/orders/:id", requireAdmin, async (req, res) => {

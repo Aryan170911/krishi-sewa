@@ -649,22 +649,27 @@ function renderProductCard(product, compact = false) {
 
   if (compact) {
     return `
-      <button class="bg-surface flex flex-col rounded-2xl border border-outline-variant overflow-hidden p-3 gap-3 text-left hover:border-primary transition-colors duration-300 h-full w-full" onclick="navigateTo('product', { productId: ${product.id} })">
-        <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-surface-container-low">
-          <img alt="${product.name}" class="w-full h-full object-cover" src="${product.image}">
-          ${discount > 0 ? `<span class="absolute top-2 left-2 bg-error-container text-on-error-container text-label-sm font-bold px-2 py-1 rounded-md">-${discount}%</span>` : ""}
-        </div>
-        <div class="flex flex-col flex-grow justify-between gap-2 px-1 pb-1">
-          <div>
-            <p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-1">${product.category}</p>
-            <h3 class="font-body-md text-body-md font-semibold text-on-surface line-clamp-2 leading-snug">${product.name}</h3>
+      <div class="relative">
+        <button class="bg-surface flex flex-col rounded-2xl border border-outline-variant overflow-hidden p-3 gap-3 text-left hover:border-primary transition-colors duration-300 h-full w-full" onclick="navigateTo('product', { productId: ${product.id} })">
+          <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-surface-container-low">
+            <img alt="${product.name}" class="w-full h-full object-cover" src="${product.image}">
+            ${discount > 0 ? `<span class="absolute top-2 left-2 bg-error-container text-on-error-container text-label-sm font-bold px-2 py-1 rounded-md">-${discount}%</span>` : ""}
           </div>
-          <div class="flex items-center gap-2 mt-1">
-            <span class="font-headline-sm text-headline-sm text-primary">${formatPrice(product.price)}</span>
-            ${product.originalPrice && product.originalPrice > product.price ? `<span class="text-body-sm text-outline line-through">${formatPrice(product.originalPrice)}</span>` : ""}
+          <div class="flex flex-col flex-grow justify-between gap-2 px-1 pb-1">
+            <div>
+              <p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-1">${product.category}</p>
+              <h3 class="font-body-md text-body-md font-semibold text-on-surface line-clamp-2 leading-snug">${product.name}</h3>
+            </div>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="font-headline-sm text-headline-sm text-primary">${formatPrice(product.price)}</span>
+              ${product.originalPrice && product.originalPrice > product.price ? `<span class="text-body-sm text-outline line-through">${formatPrice(product.originalPrice)}</span>` : ""}
+            </div>
           </div>
-        </div>
-      </button>
+        </button>
+        <button onclick="event.stopPropagation(); toggleWishlist(${product.id})" class="absolute top-3 right-3 h-8 w-8 rounded-full bg-white/90 backdrop-blur shadow flex items-center justify-center hover:scale-110 transition-transform z-10" title="Add to wishlist">
+          <span class="material-symbols-outlined text-error text-[18px]">favorite</span>
+        </button>
+      </div>
     `;
   }
 
@@ -859,6 +864,82 @@ function renderHomePage() {
       </section>
     </main>
   `;
+}
+
+function renderSearchPage() {
+  const q = state.searchQuery || "";
+  return `
+    <main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-section-gap-mobile md:py-section-gap pb-24 md:pb-0">
+      <h1 class="text-2xl font-bold text-primary mb-2">Search Results</h1>
+      <p class="text-on-surface-variant mb-6">${q ? `Results for "<b>${escapeHtml(q)}</b>"` : "Type a search query"}</p>
+      <div class="mb-4">
+        <form onsubmit="event.preventDefault(); state.searchQuery=this.q.value.trim(); navigateTo('search');">
+          <input name="q" value="${escapeHtml(q)}" placeholder="Search seeds, fertilizers, tools..." class="w-full border border-outline-variant rounded-full px-5 py-3 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
+        </form>
+      </div>
+      <div id="searchResults" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+        <div class="col-span-full text-center text-on-surface-variant py-8">Loading…</div>
+      </div>
+    </main>
+  `;
+}
+
+async function loadSearchResults() {
+  const wrap = document.getElementById("searchResults");
+  if (!wrap) return;
+  const q = (state.searchQuery || "").trim();
+  if (!q) { wrap.innerHTML = `<div class="col-span-full text-center text-on-surface-variant py-8">Enter a search query above</div>`; return; }
+  wrap.innerHTML = `<div class="col-span-full text-center text-on-surface-variant py-8">Searching…</div>`;
+  try {
+    const results = await apiGet(`/search?q=${encodeURIComponent(q)}`);
+    if (!results || results.length === 0) {
+      wrap.innerHTML = `<div class="col-span-full text-center py-8">
+        <span class="material-symbols-outlined text-outline text-5xl">search_off</span>
+        <p class="text-on-surface-variant mt-2">No results for "${escapeHtml(q)}"</p>
+      </div>`;
+      return;
+    }
+    // Map Supabase results to local product format for renderProductCard
+    const mapped = results.map(r => ({
+      id: r.id, name: r.name, description: r.description, shortDescription: r.short_description,
+      price: Number(r.price), originalPrice: Number(r.original_price), image: r.image,
+      category: r.category, tags: r.tags, inStock: r.in_stock, rating: Number(r.rating),
+      reviewCount: r.review_count
+    }));
+    wrap.innerHTML = mapped.map(p => renderProductCard(p, true)).join("");
+  } catch (e) {
+    wrap.innerHTML = `<div class="col-span-full text-center text-error py-8">Search failed: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderWishlistPage() {
+  return `
+    <main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-section-gap-mobile md:py-section-gap pb-24 md:pb-0">
+      <h1 class="text-2xl font-bold text-primary mb-2">My Wishlist</h1>
+      <p class="text-on-surface-variant mb-6">Products you've saved for later</p>
+      <div id="wishlistGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+        <div class="col-span-full text-center text-on-surface-variant py-8">Loading…</div>
+      </div>
+    </main>
+  `;
+}
+
+async function loadWishlistPage() {
+  const wrap = document.getElementById("wishlistGrid");
+  if (!wrap) return;
+  if (!state.authUser) { wrap.innerHTML = `<div class="col-span-full text-center py-8"><a onclick="navigateTo('auth')" class="text-primary font-semibold cursor-pointer">Log in to see your wishlist</a></div>`; return; }
+  try {
+    const items = await apiGet("/wishlist") || [];
+    if (items.length === 0) { wrap.innerHTML = `<div class="col-span-full text-center py-8"><span class="material-symbols-outlined text-outline text-5xl">favorite</span><p class="text-on-surface-variant mt-2">No saved products yet</p><button onclick="navigateTo('shop')" class="mt-3 text-primary font-semibold">Browse products →</button></div>`; return; }
+    const products = [];
+    for (const it of items) {
+      const p = await apiGet(`/products/${it.product_id}`);
+      if (p) products.push(p);
+    }
+    wrap.innerHTML = products.map(p => renderProductCard(p, true)).join("");
+  } catch (e) {
+    wrap.innerHTML = `<div class="col-span-full text-center text-error py-8">Failed to load: ${escapeHtml(e.message)}</div>`;
+  }
 }
 
 function renderShopPage() {
@@ -2583,6 +2664,19 @@ function renderProfilePage() {
           </div>
         `}
       </section>
+
+      <!-- Tabs for other profile sections -->
+      <section class="mt-8">
+        <div class="border-b border-outline-variant flex gap-1 overflow-x-auto mb-4" id="profileTabs">
+          <button data-profile-tab="addresses" class="profile-tab px-4 py-2 text-sm font-semibold border-b-2 border-primary text-primary">Addresses</button>
+          <button data-profile-tab="wishlist" class="profile-tab px-4 py-2 text-sm font-semibold text-on-surface-variant border-b-2 border-transparent">Wishlist</button>
+          <button data-profile-tab="sessions" class="profile-tab px-4 py-2 text-sm font-semibold text-on-surface-variant border-b-2 border-transparent">Active Sessions</button>
+          <button data-profile-tab="preferences" class="profile-tab px-4 py-2 text-sm font-semibold text-on-surface-variant border-b-2 border-transparent">Preferences</button>
+        </div>
+        <div id="profileTabContent">
+          <div class="text-sm text-on-surface-variant py-4">Loading…</div>
+        </div>
+      </section>
     </main>`;
 }
 
@@ -2668,6 +2762,12 @@ function renderApp() {
       break;
     case 'profile':
       pageContent = renderProfilePage();
+      break;
+    case 'search':
+      pageContent = renderSearchPage();
+      break;
+    case 'wishlist':
+      pageContent = renderWishlistPage();
       break;
     case 'coming-soon':
       pageContent = renderComingSoonPage();
@@ -2775,6 +2875,7 @@ function renderSupportWidget() {
       <div id="supportBody" class="flex-1 overflow-y-auto p-4 space-y-3 bg-surface-container-lowest">
         ${renderSupportBody()}
       </div>
+      <div id="typingIndicator" class="hidden px-4 py-1 text-xs text-on-surface-variant italic bg-surface-container-lowest border-t border-outline-variant">Support is typing<span class="animate-pulse">…</span></div>
       <div id="supportInput" class="p-3 border-t border-outline-variant bg-white md:rounded-b-2xl shrink-0">
         ${renderSupportInput()}
       </div>
@@ -2976,7 +3077,7 @@ function renderSupportInput() {
   }
   return `
     <form onsubmit="sendSupportMessage(event)" class="flex gap-2 items-end">
-      <textarea id="supportMsgInput" rows="1" placeholder="Type your message…" oninput="autoGrowSupportInput(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); sendSupportMessage(event);}" class="flex-1 resize-none max-h-32 border border-outline-variant rounded-2xl px-3 py-2 text-base focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" style="min-height: 40px;"></textarea>
+      <textarea id="supportMsgInput" rows="1" placeholder="Type your message…" oninput="autoGrowSupportInput(this); onUserTyping();" onblur="onUserTyping(false)" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); sendSupportMessage(event);}" class="flex-1 resize-none max-h-32 border border-outline-variant rounded-2xl px-3 py-2 text-base focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" style="min-height: 40px;"></textarea>
       <button type="submit" class="h-10 w-10 shrink-0 rounded-full bg-primary text-on-primary flex items-center justify-center hover:opacity-90 disabled:opacity-40" id="supportSendBtn">
         <span class="material-symbols-outlined">send</span>
       </button>
@@ -2988,6 +3089,24 @@ function renderSupportInput() {
 function autoGrowSupportInput(el) {
   el.style.height = "40px";
   el.style.height = Math.min(el.scrollHeight, 128) + "px";
+}
+
+let userTypingTimer = null;
+function onUserTyping(isTyping = true) {
+  if (!supportState.chat) return;
+  if (userTypingTimer) clearTimeout(userTypingTimer);
+  if (isTyping) {
+    fetch(`${API_BASE}/support/chat/${supportState.chat.id}/typing`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      credentials: "include", body: JSON.stringify({ isTyping: true })
+    }).catch(() => {});
+    userTypingTimer = setTimeout(() => onUserTyping(false), 5000);
+  } else {
+    fetch(`${API_BASE}/support/chat/${supportState.chat.id}/typing`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      credentials: "include", body: JSON.stringify({ isTyping: false })
+    }).catch(() => {});
+  }
 }
 
 function escapeHtml(s) {
@@ -3170,6 +3289,17 @@ function startSupportPolling() {
             body.scrollTop = 999999;
           }
         }
+        // Check if admin is typing
+        try {
+          const t = await apiGet(`/admin/support/chat/${supportState.chat.id}/typing`);
+          if (t && t.typing && t.typing.length > 0) {
+            const ind = document.getElementById("typingIndicator");
+            if (ind) ind.classList.remove("hidden");
+          } else {
+            const ind = document.getElementById("typingIndicator");
+            if (ind) ind.classList.add("hidden");
+          }
+        } catch {}
       } else if (supportState.view === "list") {
         // Refresh the list display (for unread badges)
         const body = document.getElementById("supportBody");
@@ -3190,6 +3320,296 @@ navigateTo = function(page, params) {
   stopSupportPolling();
   return _origNavigateTo(page, params);
 };
+
+// ============================================
+// PROFILE TABS — Addresses, Wishlist, Sessions, Preferences
+// ============================================
+const profileState = { tab: "addresses" };
+
+async function loadProfileTab(tab) {
+  profileState.tab = tab;
+  // Update tab styling
+  document.querySelectorAll(".profile-tab").forEach(b => {
+    const active = b.dataset.profileTab === tab;
+    b.classList.toggle("border-primary", active);
+    b.classList.toggle("text-primary", active);
+    b.classList.toggle("text-on-surface-variant", !active);
+    b.classList.toggle("border-transparent", !active);
+  });
+  const content = document.getElementById("profileTabContent");
+  if (!content) return;
+  content.innerHTML = `<div class="text-sm text-on-surface-variant py-4">Loading…</div>`;
+  try {
+    if (tab === "addresses") return await loadAddressesTab(content);
+    if (tab === "wishlist") return await loadWishlistTab(content);
+    if (tab === "sessions") return await loadSessionsTab(content);
+    if (tab === "preferences") return await loadPreferencesTab(content);
+  } catch (e) {
+    content.innerHTML = `<div class="text-error text-sm">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function loadAddressesTab(content) {
+  const addrs = await apiGet("/addresses") || [];
+  content.innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold text-primary">Saved Addresses</h3>
+      <button onclick="openAddressForm()" class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1">
+        <span class="material-symbols-outlined text-[18px]">add</span> Add new
+      </button>
+    </div>
+    ${addrs.length === 0 ? `
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 text-center">
+        <span class="material-symbols-outlined text-outline text-4xl">home</span>
+        <p class="text-on-surface-variant mt-2 text-sm">No saved addresses</p>
+      </div>
+    ` : `
+      <div class="space-y-3">
+        ${addrs.map(a => `
+          <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <p class="font-bold text-on-surface">${escapeHtml(a.label || "Home")}</p>
+                  ${a.is_default ? '<span class="text-[10px] font-bold bg-primary text-on-primary px-2 py-0.5 rounded-full">DEFAULT</span>' : ""}
+                </div>
+                <p class="text-sm text-on-surface">${escapeHtml(a.full_name)} • ${escapeHtml(a.phone)}</p>
+                <p class="text-sm text-on-surface-variant mt-1">${escapeHtml(a.address_line1)}${a.address_line2 ? ', ' + escapeHtml(a.address_line2) : ''}${a.landmark ? ', ' + escapeHtml(a.landmark) : ''}</p>
+                <p class="text-sm text-on-surface-variant">${escapeHtml(a.district)}, ${escapeHtml(a.state)} - ${escapeHtml(a.pincode)}</p>
+              </div>
+              <button onclick="deleteAddress('${a.id}')" class="text-error hover:bg-error-container p-1 rounded" title="Delete">
+                <span class="material-symbols-outlined text-[20px]">delete</span>
+              </button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `}
+  `;
+}
+
+async function loadWishlistTab(content) {
+  const items = await apiGet("/wishlist") || [];
+  content.innerHTML = `
+    <h3 class="font-bold text-primary mb-3">Your Wishlist (${items.length})</h3>
+    ${items.length === 0 ? `
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 text-center">
+        <span class="material-symbols-outlined text-outline text-4xl">favorite</span>
+        <p class="text-on-surface-variant mt-2 text-sm">No saved items yet</p>
+        <button onclick="navigateTo('shop')" class="mt-3 text-primary font-semibold text-sm">Browse products →</button>
+      </div>
+    ` : `
+      <p class="text-sm text-on-surface-variant">Loading products…</p>
+      <div id="wishlistItems" class="space-y-2 mt-3"></div>
+    `}
+  `;
+  if (items.length > 0) {
+    // Fetch product details for each wishlist item
+    const wrap = document.getElementById("wishlistItems");
+    for (const it of items) {
+      try {
+        const p = await apiGet(`/products/${it.product_id}`);
+        if (p) {
+          const el = document.createElement("div");
+          el.className = "bg-surface-container-lowest border border-outline-variant rounded-xl p-3 flex items-center gap-3";
+          el.innerHTML = `
+            <img src="${escapeHtml(p.image)}" alt="" class="h-14 w-14 rounded-lg object-cover">
+            <div class="flex-1 min-w-0">
+              <p class="font-semibold text-sm truncate">${escapeHtml(p.name)}</p>
+              <p class="text-primary font-bold text-sm">₹${p.price}</p>
+            </div>
+            <button onclick="removeFromWishlist(${p.id})" class="text-error p-2 hover:bg-error-container rounded" title="Remove">
+              <span class="material-symbols-outlined text-[20px]">delete</span>
+            </button>
+            <button onclick="addWishlistToCart(${p.id})" class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-semibold">Add to cart</button>
+          `;
+          wrap.appendChild(el);
+        }
+      } catch {}
+    }
+  }
+}
+
+async function loadSessionsTab(content) {
+  const sessions = await apiGet("/sessions") || [];
+  content.innerHTML = `
+    <h3 class="font-bold text-primary mb-3">Active Sessions (${sessions.length})</h3>
+    <p class="text-xs text-on-surface-variant mb-3">Devices where you're currently logged in. Revoke any you don't recognize.</p>
+    ${sessions.length === 0 ? `<p class="text-sm text-on-surface-variant">No active sessions</p>` : `
+      <div class="space-y-2">
+        ${sessions.map(s => `
+          <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 flex items-center gap-3">
+            <span class="material-symbols-outlined text-primary text-2xl">${/mobile/i.test(s.device_info || "") ? "phone_iphone" : "computer"}</span>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold truncate">${escapeHtml((s.device_info || "Unknown device").substring(0, 60))}</p>
+              <p class="text-xs text-on-surface-variant">${s.ip_address || "—"} • Last active ${new Date(s.last_active_at).toLocaleString()}</p>
+            </div>
+            <button onclick="revokeSession('${s.id}')" class="text-error text-xs font-semibold hover:underline">Revoke</button>
+          </div>
+        `).join("")}
+      </div>
+    `}
+  `;
+}
+
+async function loadPreferencesTab(content) {
+  const prefs = await apiGet("/preferences") || {};
+  content.innerHTML = `
+    <h3 class="font-bold text-primary mb-3">Notification Preferences</h3>
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3">
+      ${[
+        { key: "email_order_updates", label: "Order updates via email", icon: "email" },
+        { key: "email_promotions", label: "Promotional offers", icon: "campaign" },
+        { key: "email_support_replies", label: "Support replies", icon: "forum" },
+        { key: "sms_order_updates", label: "Order updates via SMS", icon: "sms" }
+      ].map(item => `
+        <label class="flex items-center gap-3 cursor-pointer">
+          <span class="material-symbols-outlined text-primary">${item.icon}</span>
+          <span class="flex-1 text-sm">${item.label}</span>
+          <input type="checkbox" data-pref="${item.key}" ${prefs[item.key] !== false ? "checked" : ""} class="w-5 h-5 accent-primary">
+        </label>
+      `).join("")}
+      <hr class="border-outline-variant">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold mb-1">Language</label>
+          <select data-pref="language" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white">
+            <option value="en" ${prefs.language === "en" || !prefs.language ? "selected" : ""}>English</option>
+            <option value="hi" ${prefs.language === "hi" ? "selected" : ""}>हिंदी</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Currency</label>
+          <select data-pref="currency" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white">
+            <option value="INR" ${!prefs.currency || prefs.currency === "INR" ? "selected" : ""}>₹ INR</option>
+            <option value="USD" ${prefs.currency === "USD" ? "selected" : ""}>$ USD</option>
+          </select>
+        </div>
+      </div>
+      <button onclick="savePreferences()" class="w-full bg-primary text-on-primary py-2 rounded-lg font-semibold text-sm">Save preferences</button>
+    </div>
+  `;
+}
+
+async function savePreferences() {
+  const patch = {};
+  document.querySelectorAll("[data-pref]").forEach(el => {
+    const k = el.dataset.pref;
+    if (el.type === "checkbox") patch[k] = el.checked;
+    else patch[k] = el.value;
+  });
+  try {
+    await apiPost("/preferences", patch, true);
+    showToast("Preferences saved");
+  } catch (e) { showToast("Failed: " + e.message); }
+}
+
+async function deleteAddress(id) {
+  if (!confirm("Delete this address?")) return;
+  try { await fetch(`${API_BASE}/addresses/${id}`, { method: "DELETE", credentials: "include" }); loadProfileTab("addresses"); showToast("Address deleted"); }
+  catch (e) { showToast("Failed: " + e.message); }
+}
+
+async function removeFromWishlist(productId) {
+  try { await fetch(`${API_BASE}/wishlist/${productId}`, { method: "DELETE", credentials: "include" }); loadProfileTab("wishlist"); showToast("Removed"); }
+  catch (e) { showToast("Failed: " + e.message); }
+}
+
+async function addWishlistToCart(productId) {
+  try {
+    const p = await apiGet(`/products/${productId}`);
+    if (!p) return;
+    const existing = state.cart.find(c => c.id === productId);
+    if (existing) existing.quantity++;
+    else state.cart.push({ id: p.id, name: p.name, price: p.price, image: p.image, quantity: 1 });
+    saveCart();
+    // Sync to server
+    fetch(`${API_BASE}/cart`, { method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ items: state.cart.map(c => ({ id: c.id, quantity: c.quantity, price: c.price, name: c.name, image: c.image })) }) }).catch(() => {});
+    showToast("Added to cart");
+  } catch (e) { showToast("Failed: " + e.message); }
+}
+
+async function revokeSession(id) {
+  if (!confirm("Revoke this session? The device will be logged out.")) return;
+  try { await fetch(`${API_BASE}/sessions/${id}`, { method: "DELETE", credentials: "include" }); loadProfileTab("sessions"); showToast("Session revoked"); }
+  catch (e) { showToast("Failed: " + e.message); }
+}
+
+function openAddressForm() {
+  const states = window.__krishi_states || [];
+  showModal("Add Address", `
+    <form onsubmit="submitNewAddress(event)" class="space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <input name="label" placeholder="Label (Home/Work)" class="border border-outline-variant rounded-lg px-3 py-2 text-sm" value="Home">
+        <input name="phone" placeholder="10-digit phone" required pattern="[0-9]{10}" class="border border-outline-variant rounded-lg px-3 py-2 text-sm">
+      </div>
+      <input name="fullName" placeholder="Full name" required class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm">
+      <input name="addressLine1" placeholder="Address line 1" required class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm">
+      <input name="addressLine2" placeholder="Address line 2 (optional)" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm">
+      <input name="landmark" placeholder="Landmark (optional)" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm">
+      <div class="grid grid-cols-2 gap-3">
+        <input name="pincode" placeholder="6-digit pincode" required pattern="[0-9]{6}" class="border border-outline-variant rounded-lg px-3 py-2 text-sm">
+        <input name="city" placeholder="City" class="border border-outline-variant rounded-lg px-3 py-2 text-sm">
+      </div>
+      <select name="state" required class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white">
+        <option value="">Select state</option>
+        ${states.map(s => `<option value="${s.code}">${s.name}</option>`).join("")}
+      </select>
+      <input name="district" placeholder="District" required class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm">
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="isDefault"> Set as default</label>
+      <div class="flex gap-2 pt-2">
+        <button type="button" onclick="closeModal()" class="flex-1 border border-outline-variant py-2 rounded-lg font-semibold">Cancel</button>
+        <button type="submit" class="flex-1 bg-primary text-on-primary py-2 rounded-lg font-semibold">Save</button>
+      </div>
+    </form>
+  `);
+}
+
+async function submitNewAddress(e) {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const body = Object.fromEntries(f.entries());
+  body.isDefault = f.get("isDefault") === "on";
+  try {
+    await apiPost("/addresses", body, true);
+    closeModal();
+    loadProfileTab("addresses");
+    showToast("Address saved");
+  } catch (err) { showToast("Failed: " + err.message); }
+}
+
+// Wire up tab buttons (called on every render)
+document.addEventListener("click", (e) => {
+  const tab = e.target.closest("[data-profile-tab]");
+  if (tab) loadProfileTab(tab.dataset.profileTab);
+});
+
+// Load default tab on first profile render
+setTimeout(() => {
+  if (state.currentPage === "profile" && document.getElementById("profileTabContent")) {
+    loadProfileTab("addresses");
+  }
+  if (state.currentPage === "search") loadSearchResults();
+  if (state.currentPage === "wishlist") loadWishlistPage();
+}, 200);
+
+// ============================================
+// WISHLIST BUTTON on product cards
+// ============================================
+async function toggleWishlist(productId) {
+  if (!state.authUser) { showToast("Please log in to use wishlist"); navigateTo("auth"); return; }
+  try {
+    const list = await apiGet("/wishlist") || [];
+    const has = list.find(x => x.product_id === productId);
+    if (has) {
+      await fetch(`${API_BASE}/wishlist/${productId}`, { method: "DELETE", credentials: "include" });
+      showToast("Removed from wishlist");
+    } else {
+      await apiPost(`/wishlist/${productId}`, {}, true);
+      showToast("Added to wishlist ❤️");
+    }
+  } catch (e) { showToast("Failed: " + e.message); }
+}
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);

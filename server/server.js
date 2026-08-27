@@ -214,11 +214,36 @@ function logAudit(action, details, ip) {
 function generateOrderId() {
   return "#KS-" + Math.random().toString(36).substring(2, 8).toUpperCase();
 }
-function calculateCartTotal(cartItems) {
+function calculateCartTotal(cartItems, promoCode = null) {
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const discount = subtotal > 1000 ? 200 : 0;
+  let discount = subtotal > 1000 ? 200 : 0;
+  // Promo codes (simple in-memory list)
+  const promos = {
+    "WELCOME10": { type: "percent", value: 10, minSubtotal: 0, maxDiscount: 500 },
+    "FARMER20": { type: "percent", value: 20, minSubtotal: 1000, maxDiscount: 1000 },
+    "FLAT100": { type: "fixed", value: 100, minSubtotal: 500, maxDiscount: 100 },
+    "SEED50": { type: "percent", value: 50, minSubtotal: 200, maxDiscount: 200, onlyCategory: "seeds" }
+  };
+  let promoDiscount = 0;
+  if (promoCode && promos[promoCode]) {
+    const p = promos[promoCode];
+    if (subtotal >= p.minSubtotal) {
+      if (p.type === "percent") {
+        promoDiscount = Math.min((subtotal * p.value) / 100, p.maxDiscount);
+      } else if (p.type === "fixed") {
+        promoDiscount = Math.min(p.value, p.maxDiscount);
+      }
+    }
+  }
+  const totalDiscount = discount + promoDiscount;
   const shipping = subtotal > 2000 ? 0 : 60;
-  return { subtotal, discount, shipping, total: subtotal - discount + shipping };
+  return {
+    subtotal,
+    discount: totalDiscount,
+    discountBreakdown: { auto: discount, promo: promoDiscount, code: promoCode || null },
+    shipping,
+    total: subtotal - totalDiscount + shipping
+  };
 }
 
 // ============ API Routes ============
@@ -1806,6 +1831,28 @@ app.get("/api/orders/:id", async (req, res) => {
   if ((order.email || "").toLowerCase() !== userEmail) return res.status(403).json({ error: "Forbidden" });
   res.json(order);
 });
+
+// Promo code validation - returns discount preview
+app.post("/api/promo/validate", async (req, res) => {
+  try {
+    const code = String(req.body?.code || "").trim().toUpperCase();
+    const cart = Array.isArray(req.body?.items) ? req.body.items : [];
+    if (!code) return res.status(400).json({ error: "Code required" });
+    // Use a sample cart to preview discount
+    const mockItems = cart.map(c => ({ id: c.id, quantity: c.quantity || 1, price: c.price || 0 }));
+    const totals = calculateCartTotal(mockItems, code);
+    if (totals.discountBreakdown.promo === 0) {
+      return res.status(400).json({ error: "Invalid code or minimum order not met" });
+    }
+    res.json({
+      code,
+      valid: true,
+      discount: totals.discountBreakdown.promo,
+      message: `Code applied! You save ₹${totals.discountBreakdown.promo}`
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post("/api/orders", orderLimiter, async (req, res) => {
   const session = getSession(req);
   if (!session) return res.status(401).json({ error: "Login required to place an order" });
@@ -1824,6 +1871,7 @@ app.post("/api/orders", orderLimiter, async (req, res) => {
     console.warn(`[order] District '${address.district}' not in top list for state ${address.state}, accepting anyway (pincode validated)`);
   }
   if (!["upi","card","netbanking","cod","razorpay"].includes(paymentMethod)) return res.status(400).json({ error: "Invalid paymentMethod" });
+  const promoCode = req.body?.promoCode ? String(req.body.promoCode).trim().toUpperCase() : null;
   const enrichedItems = [];
   for (const item of items) {
     const product = products.find((p) => p.id === parseInt(item.id));
@@ -1833,7 +1881,7 @@ app.post("/api/orders", orderLimiter, async (req, res) => {
     if (qty <= 0) return res.status(400).json({ error: `Invalid quantity for product ${item.id}` });
     enrichedItems.push({ id: product.id, name: product.name, price: product.price, quantity: qty, image: product.image });
   }
-  const { subtotal, discount, shipping, total } = calculateCartTotal(enrichedItems);
+  const { subtotal, discount, shipping, total } = calculateCartTotal(enrichedItems, promoCode);
   const order = { id: generateOrderId(), date: new Date().toISOString(), email: session?.email || null, userName: session?.name || null, items: enrichedItems, subtotal, discount, shipping, total, address, paymentMethod, status: "processing" };
   if (supabase) {
     try {

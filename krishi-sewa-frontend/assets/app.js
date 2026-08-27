@@ -391,7 +391,9 @@ const state = {
   authUser: JSON.parse(localStorage.getItem("krishi_user") || "null"),
   authMode: "login", // login | signup | verify | forgot | reset
   authPendingEmail: "",
-  authPendingPurpose: "" // signup | reset
+  authPendingPurpose: "", // signup | reset
+  recentlyViewed: [], // [{ id, viewedAt }] - in-memory only
+  appliedPromo: null // promo code applied to current checkout
 };
 
 // ============================================
@@ -415,9 +417,28 @@ function getCartSubtotal() {
   return state.cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 }
 
+function getCartDiscount() {
+  const subtotal = getCartSubtotal();
+  let discount = subtotal > 1000 ? 200 : 0;
+  if (state.appliedPromo) {
+    const promos = {
+      "WELCOME10": { type: "percent", value: 10, minSubtotal: 0, maxDiscount: 500 },
+      "FARMER20": { type: "percent", value: 20, minSubtotal: 1000, maxDiscount: 1000 },
+      "FLAT100": { type: "fixed", value: 100, minSubtotal: 500, maxDiscount: 100 },
+      "SEED50": { type: "percent", value: 50, minSubtotal: 200, maxDiscount: 200 }
+    };
+    const p = promos[state.appliedPromo];
+    if (p && subtotal >= p.minSubtotal) {
+      if (p.type === "percent") discount += Math.min((subtotal * p.value) / 100, p.maxDiscount);
+      else if (p.type === "fixed") discount += Math.min(p.value, p.maxDiscount);
+    }
+  }
+  return Math.round(discount);
+}
+
 function getCartTotal() {
   const subtotal = getCartSubtotal();
-  const discount = subtotal > 1000 ? 200 : 0;
+  const discount = getCartDiscount();
   const shipping = subtotal > 2000 ? 0 : 60;
   return subtotal - discount + shipping;
 }
@@ -1288,6 +1309,7 @@ function renderProductPage() {
       </div>
 
       <!-- Tabs Section -->
+      ${renderRecentlyViewedSection(product.id)}
       <div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden">
         <div class="flex border-b border-outline-variant" id="productTabs">
           <button class="flex-1 py-4 px-6 font-label-md text-label-md text-primary border-b-2 border-primary" onclick="showProductTab('description')" id="tab-description">Description</button>
@@ -1299,6 +1321,21 @@ function renderProductPage() {
         </div>
       </div>
     </main>
+  `;
+}
+
+function renderRecentlyViewedSection(currentId) {
+  const recent = (state.recentlyViewed || []).filter(p => p.id !== currentId).slice(0, 4);
+  if (recent.length === 0) return "";
+  const products = recent.map(r => getProductById(r.id)).filter(Boolean);
+  if (products.length === 0) return "";
+  return `
+    <section class="mb-section-gap">
+      <h2 class="text-headline-md font-headline-md text-primary mb-stack-md">Recently Viewed</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        ${products.map(p => renderProductCard(p, true)).join("")}
+      </div>
+    </section>
   `;
 }
 
@@ -1674,23 +1711,26 @@ function renderCheckoutPage() {
   }).join('')}
             </div>
             <div class="border-t border-outline-variant pt-stack-sm flex flex-col gap-unit mb-stack-lg">
+              <div class="flex gap-2">
+                <input id="promoCodeInput" placeholder="Promo code (try WELCOME10)" class="flex-1 min-w-0 px-3 py-2 text-sm border border-outline-variant rounded-lg bg-surface focus:border-primary focus:outline-none uppercase">
+                <button onclick="applyPromoCode()" class="px-3 py-2 bg-primary text-on-primary rounded-lg text-sm font-semibold hover:opacity-90">Apply</button>
+              </div>
+              <div id="promoMessage" class="text-xs"></div>
               <div class="flex justify-between">
                 <span class="text-body-sm font-body-sm text-on-surface-variant">Subtotal</span>
-                <span class="text-body-sm font-body-sm text-on-surface-variant">${formatPrice(getCartSubtotal())}</span>
+                <span class="text-body-sm font-body-sm text-on-surface-variant" id="cartSubtotal">${formatPrice(getCartSubtotal())}</span>
               </div>
-              ${getCartSubtotal() > 1000 ? `
-                <div class="flex justify-between">
-                  <span class="text-body-sm font-body-sm text-on-surface-variant">Heritage Discount</span>
-                  <span class="text-body-sm font-body-sm text-primary">- ${formatPrice(200)}</span>
-                </div>
-              ` : ''}
+              <div class="flex justify-between" id="discountRow" style="display: ${state.appliedPromo && getCartSubtotal() > 1000 ? 'flex' : (state.appliedPromo ? 'flex' : 'none')}">
+                <span class="text-body-sm font-body-sm text-on-surface-variant">Discount${state.appliedPromo ? ` (${state.appliedPromo})` : ' (Heritage)'}</span>
+                <span class="text-body-sm font-body-sm text-primary" id="discountAmount">- ${formatPrice(getCartDiscount())}</span>
+              </div>
               <div class="flex justify-between">
                 <span class="text-body-sm font-body-sm text-on-surface-variant">Shipping</span>
-                <span class="text-body-sm font-body-sm text-on-surface-variant">${getCartSubtotal() > 2000 ? 'FREE' : formatPrice(60)}</span>
+                <span class="text-body-sm font-body-sm text-on-surface-variant" id="cartShipping">${getCartSubtotal() > 2000 ? 'FREE' : formatPrice(60)}</span>
               </div>
               <div class="flex justify-between items-center mt-unit">
                 <span class="text-headline-sm font-headline-sm text-on-secondary-container">Total</span>
-                <span class="text-headline-sm font-headline-sm text-primary font-bold">${formatPrice(getCartTotal())}</span>
+                <span class="text-headline-sm font-headline-sm text-primary font-bold" id="cartTotal">${formatPrice(getCartTotal())}</span>
               </div>
             </div>
             <p class="text-center text-label-sm font-label-sm text-on-surface-variant mt-unit flex items-center justify-center">
@@ -2302,6 +2342,8 @@ async function handleLogout(){
   state.checkoutStep = 1;
   state.isMobileMenuOpen = false;
   state.isCartSidebarOpen = false;
+  state.appliedPromo = null;
+  state.recentlyViewed = [];
   try {
     localStorage.removeItem("krishi_user");
     localStorage.removeItem("krishi_sewa_cart");
@@ -2323,6 +2365,12 @@ function navigateTo(page, params = {}) {
 
   if (params.productId) {
     state.currentProduct = getProductById(params.productId);
+    // Track recently viewed (in-memory only, max 8)
+    if (state.currentProduct) {
+      state.recentlyViewed = (state.recentlyViewed || []).filter(p => p.id !== state.currentProduct.id);
+      state.recentlyViewed.unshift({ id: state.currentProduct.id, viewedAt: Date.now() });
+      if (state.recentlyViewed.length > 8) state.recentlyViewed = state.recentlyViewed.slice(0, 8);
+    }
   }
 
   // Update URL hash
@@ -2498,8 +2546,26 @@ function updateProductQty(productId, quantity) {
 
 function clearCart() {
   state.cart = [];
+  state.appliedPromo = null;
   saveCart();
   renderApp();
+}
+
+async function applyPromoCode() {
+  const input = document.getElementById("promoCodeInput");
+  const msg = document.getElementById("promoMessage");
+  if (!input) return;
+  const code = input.value.trim().toUpperCase();
+  if (!code) { msg.innerHTML = '<span class="text-error">Enter a code</span>'; return; }
+  try {
+    const r = await apiPost("/promo/validate", { code, items: state.cart.map(c => ({ id: c.id, quantity: c.quantity, price: c.price })) }, true);
+    if (r.error) { msg.innerHTML = `<span class="text-error">${escapeHtml(r.error)}</span>`; return; }
+    state.appliedPromo = code;
+    msg.innerHTML = `<span class="text-primary font-semibold">${escapeHtml(r.message)}</span>`;
+    renderApp();
+  } catch (e) {
+    msg.innerHTML = `<span class="text-error">${escapeHtml(e.message)}</span>`;
+  }
 }
 
 // ============================================
@@ -2739,7 +2805,8 @@ async function placeOrder() {
   const payload = {
     items: state.cart.map(item => ({ id: item.id, quantity: item.quantity })),
     address: state.billingAddress,
-    paymentMethod: state.paymentMethod
+    paymentMethod: state.paymentMethod,
+    promoCode: state.appliedPromo || undefined
   };
 
   // Save address if user checked the box

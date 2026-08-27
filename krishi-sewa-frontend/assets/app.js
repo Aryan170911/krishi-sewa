@@ -1424,7 +1424,7 @@ function renderCartPage() {
     return `
             <div class="flex flex-col sm:flex-row gap-stack-md bg-surface p-gutter rounded-xl border border-outline-variant group hover:border-primary transition-colors duration-300" data-cart-item="${item.id}">
               <div class="w-full sm:w-32 h-32 rounded-lg overflow-hidden flex-shrink-0 border border-outline-variant/30">
-                <img alt="${product.name}" class="w-full h-full object-cover" src="${product.image}">
+            <img alt="${product.name}" loading="lazy" decoding="async" class="w-full h-full object-cover" src="${product.image}">
               </div>
               <div class="flex-grow flex flex-col justify-between">
                 <div class="flex justify-between items-start gap-4">
@@ -1879,8 +1879,8 @@ function renderOrdersPage() {
           <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6">
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
               <div class="flex items-center gap-4">
-                <div class="w-16 h-16 rounded-lg overflow-hidden border border-outline-variant/30 flex-shrink-0">
-                  <img alt="${order.items[0] ? getProductById(order.items[0].id)?.name || 'Product' : 'Order'}" class="w-full h-full object-cover" src="${order.items[0] ? getProductById(order.items[0].id)?.image || '' : ''}">
+                <div class="w-16 h-16 rounded-lg overflow-hidden border border-outline-variant/30 flex-shrink-0 bg-surface-variant">
+                  ${order.items[0] && getProductById(order.items[0].id)?.image ? `<img alt="${escapeHtml(getProductById(order.items[0].id)?.name || 'Product')}" loading="lazy" decoding="async" class="w-full h-full object-cover" src="${escapeHtml(getProductById(order.items[0].id)?.image)}">` : '<span class="w-full h-full flex items-center justify-center text-outline"><span class="material-symbols-outlined">package_2</span></span>'}
                 </div>
                 <div>
                   <h3 class="font-headline-md text-headline-md text-on-surface">${order.items.length} item${order.items.length > 1 ? 's' : ''}</h3>
@@ -1898,11 +1898,9 @@ function renderOrdersPage() {
               <button class="bg-primary text-on-primary px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors" onclick="viewOrderDetails('${order.id}')">
                 <span class="material-symbols-outlined mr-1">visibility</span> View Details
               </button>
-              ${order.status !== 'delivered' ? `
-                <button class="bg-transparent border border-outline-variant text-on-surface-variant px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-surface-container-low transition-colors" onclick="trackOrder('${order.id}')">
-                  <span class="material-symbols-outlined mr-1">local_shipping</span> Track Order
-                </button>
-              ` : ''}
+              <button class="bg-transparent border border-outline-variant text-on-surface-variant px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-surface-container-low transition-colors" onclick="trackOrder('${order.id}')">
+                <span class="material-symbols-outlined mr-1">local_shipping</span> Track
+              </button>
               <button class="bg-transparent border border-outline-variant text-on-surface-variant px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-surface-container-low transition-colors" onclick="reorderItems('${order.id}')">
                 <span class="material-symbols-outlined mr-1">replay</span> Buy Again
               </button>
@@ -2773,8 +2771,68 @@ function viewOrderDetails(orderId) {
   }
 }
 
-function trackOrder(orderId) {
-  showToast('Tracking feature coming soon!');
+async function trackOrder(orderId) {
+  // Show modal with order status timeline
+  const order = state.orders.find(o => o.id === orderId);
+  if (!order) return;
+  const orderDate = new Date(order.date);
+  const modalId = "trackOrderModal-" + orderId;
+  // Remove existing modal if any
+  document.getElementById(modalId)?.remove();
+  const modal = document.createElement("div");
+  modal.id = modalId;
+  modal.className = "fixed inset-0 z-[80] bg-black/40 flex items-center justify-center p-4";
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 max-h-[80vh] overflow-y-auto shadow-2xl" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-headline-md text-headline-md text-primary">Order ${escapeHtml(orderId)}</h2>
+        <button onclick="document.getElementById('${modalId}').remove()" class="text-on-surface-variant hover:text-on-surface p-1">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <p class="text-sm text-on-surface-variant mb-4">Placed on ${orderDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
+      <div class="bg-primary-container/20 border border-primary rounded-lg p-3 mb-4 text-center">
+        <p class="text-xs text-on-surface-variant">Current Status</p>
+        <p class="font-bold text-primary text-lg capitalize">${escapeHtml(order.status)}</p>
+      </div>
+      <div id="${modalId}-events" class="text-sm text-on-surface-variant text-center py-4">Loading timeline…</div>
+      <button onclick="document.getElementById('${modalId}').remove()" class="mt-4 w-full bg-primary text-on-primary py-2 rounded-lg font-semibold">Close</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  // Fetch events
+  try {
+    const events = await apiGet(`/orders/${encodeURIComponent(orderId)}/events`) || [];
+    const wrap = document.getElementById(modalId + "-events");
+    if (!wrap) return;
+    if (events.length === 0) {
+      wrap.innerHTML = `<p class="py-2">No status updates yet</p>`;
+      return;
+    }
+    wrap.innerHTML = `
+      <div class="space-y-3 text-left">
+        ${events.map((e, i) => `
+          <div class="flex gap-3">
+            <div class="flex flex-col items-center">
+              <div class="h-8 w-8 rounded-full bg-primary text-on-primary flex items-center justify-center text-xs font-bold shrink-0">
+                ${i + 1}
+              </div>
+              ${i < events.length - 1 ? `<div class="w-0.5 flex-1 bg-outline-variant my-1"></div>` : ""}
+            </div>
+            <div class="flex-1 pb-3">
+              <p class="font-semibold text-on-surface capitalize">${escapeHtml(e.event_type)}</p>
+              <p class="text-xs text-on-surface-variant">${new Date(e.created_at).toLocaleString()}</p>
+              ${e.actor_email ? `<p class="text-xs text-on-surface-variant">by ${escapeHtml(e.actor_email)}</p>` : ""}
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  } catch (e) {
+    const wrap = document.getElementById(modalId + "-events");
+    if (wrap) wrap.innerHTML = `<p class="text-error">Failed to load: ${escapeHtml(e.message)}</p>`;
+  }
 }
 
 function reorderItems(orderId) {

@@ -203,6 +203,29 @@ async function run() {
     });
   }
 
+  // Promo code tests
+  await test("POST /promo/validate (valid WELCOME10)", async () => {
+    const r = await http("POST", "/promo/validate", {
+      code: "WELCOME10",
+      items: [{ id: 1, quantity: 1, price: 350 }]
+    });
+    if (r.status !== 200) throw new Error(`status ${r.status}`);
+    if (r.data.discount !== 35) throw new Error(`expected 35, got ${r.data.discount}`);
+  });
+
+  await test("POST /promo/validate (invalid code)", async () => {
+    const r = await http("POST", "/promo/validate", {
+      code: "BOGUS",
+      items: [{ id: 1, quantity: 1, price: 350 }]
+    });
+    if (r.status !== 400) throw new Error(`expected 400, got ${r.status}`);
+  });
+
+  await test("DELETE /auth/account (no session -> 401)", async () => {
+    const r = await http("DELETE", "/auth/account");
+    if (r.status !== 401) throw new Error(`expected 401, got ${r.status}`);
+  });
+
   // 20. Bad email format
   await test("POST /auth/login (bad email format)", async () => {
     const r = await http("POST", "/auth/login", { email: "notanemail", password: "x" });

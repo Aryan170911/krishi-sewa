@@ -371,6 +371,21 @@ if RESEND_API_KEY:
 else:
     print("[Email] Resend NOT configured - set RESEND_API_KEY env", flush=True)
 
+# Supabase (Postgres) — primary store when configured; service_role key must be set via env
+SUPABASE_URL = os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL") or "https://xypizzylruvgcglhyiyb.supabase.co"
+SUPABASE_PUBLISHABLE = os.environ.get("SUPABASE_PUBLISHABLE_KEY") or os.environ.get("SUPABASE_ANON_KEY") or os.environ.get("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") or ""
+SUPABASE_SECRET = os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or ""
+supabase = None
+if SUPABASE_URL and SUPABASE_SECRET:
+    try:
+        from supabase import create_client as _sb_create
+        supabase = _sb_create(SUPABASE_URL, SUPABASE_SECRET)
+        print(f"[Supabase] Connected to {SUPABASE_URL} as service_role", flush=True)
+    except Exception as e:
+        print(f"[Supabase] init failed, using in-memory: {e}", flush=True)
+else:
+    print("[Supabase] Not configured - set SUPABASE_SECRET_KEY env (service_role) for database persistence", flush=True)
+
 # Razorpay config (test keys)
 RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "rzp_test_Sv4HWH1qFfP22s")
 RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "test_secret_for_demo")
@@ -506,6 +521,40 @@ def _send_otp_email(email, code, name):
     except Exception as e:
         return False, str(e)
 
+# User storage: Supabase (Postgres) when configured, else in-memory dict
+def _find_user(email):
+    if supabase:
+        try:
+            r = supabase.table("users").select("*").eq("email", email).execute()
+            return r.data[0] if r.data else None
+        except Exception as e:
+            print(f"[Supabase] find_user error: {e}", flush=True)
+            return None
+    return AUTH_DB.get(email)
+
+def _create_user(user):
+    if supabase:
+        try:
+            r = supabase.table("users").insert(user).execute()
+            return r.data[0] if r.data else None
+        except Exception as e:
+            print(f"[Supabase] create_user error: {e}", flush=True)
+            return None
+    AUTH_DB[user["email"]] = user
+    return user
+
+def _update_user(email, patch):
+    if supabase:
+        try:
+            r = supabase.table("users").update(patch).eq("email", email).execute()
+            return r.data[0] if r.data else None
+        except Exception as e:
+            print(f"[Supabase] update_user error: {e}", flush=True)
+            return None
+    if AUTH_DB.get(email):
+        AUTH_DB[email].update(patch)
+    return AUTH_DB.get(email)
+
 def _get_session(req):
     cookie = (req.headers.get("Cookie") or "")
     token = None
@@ -532,10 +581,10 @@ def auth_signup():
     if not name: return jsonify({"error":"Name required"}),400
     err = _validate_password(password)
     if err: return jsonify({"error": err}),400
-    if AUTH_DB.get(email): return jsonify({"error":"Account already exists with this email — try logging in"}),409
+    if _find_user(email): return jsonify({"error":"Account already exists with this email — try logging in"}),409
     code = _new_code()
     OTP_STORE[email] = {"code": code, "expires_at": time.time() + OTP_TTL, "attempts": 0, "name": name, "password": password, "purpose": "signup"}
-    print(f"[OTP signup] {email} -> {code}", flush=True)
+    print(f"[OTP signup] {email} -> {code} {'(Supabase)' if supabase else '(local)'}", flush=True)
     ok, err = _send_otp_email(email, code, name)
     if not ok: return jsonify({"error": err or "send failed"}),502
     return jsonify({"ok": True, "message": "Code sent to " + email})
@@ -555,8 +604,9 @@ def auth_verify_signup():
     if rec["code"] != code:
         rec["attempts"] += 1
         return jsonify({"error": f"Wrong code ({5-rec['attempts']} attempts left)"}),400
-    if AUTH_DB.get(email): return jsonify({"error":"Account already exists"}),409
-    AUTH_DB[email] = {"email": email, "name": rec["name"], "password_hash": _hash_password(rec["password"]), "created_at": datetime.now(timezone.utc).isoformat()}
+    if _find_user(email): return jsonify({"error":"Account already exists"}),409
+    user = {"email": email, "name": rec["name"], "password_hash": _hash_password(rec["password"]), "created_at": datetime.now(timezone.utc).isoformat()}
+    _create_user(user)
     OTP_STORE.pop(email, None)
     resp = jsonify({"ok": True, "user": {"email": email, "name": rec["name"]}})
     _issue_session(resp, email, rec["name"])
@@ -569,7 +619,7 @@ def auth_login():
     password = data.get("password") or ""
     if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email): return jsonify({"error":"Valid email required"}),400
     if not password: return jsonify({"error":"Password required"}),400
-    user = AUTH_DB.get(email)
+    user = _find_user(email)
     if not user: return jsonify({"error":"No account with this email — sign up first"}),404
     if not _verify_password(password, user["password_hash"]):
         return jsonify({"error":"Wrong password — try again or use 'Forgot password?'"}),401
@@ -582,7 +632,7 @@ def auth_forgot():
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
     if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email): return jsonify({"error":"Valid email required"}),400
-    if not AUTH_DB.get(email): return jsonify({"error":"No account with this email — sign up first"}),404
+    if not _find_user(email): return jsonify({"error":"No account with this email — sign up first"}),404
     code = _new_code()
     OTP_STORE[email] = {"code": code, "expires_at": time.time() + OTP_TTL, "attempts": 0, "purpose": "reset"}
     print(f"[OTP reset] {email} -> {code}", flush=True)
@@ -608,9 +658,9 @@ def auth_reset_password():
     if rec["code"] != code:
         rec["attempts"] += 1
         return jsonify({"error": f"Wrong code ({5-rec['attempts']} attempts left)"}),400
-    user = AUTH_DB.get(email)
+    user = _find_user(email)
     if not user: return jsonify({"error":"Account not found"}),404
-    user["password_hash"] = _hash_password(new_pw)
+    _update_user(email, {"password_hash": _hash_password(new_pw)})
     OTP_STORE.pop(email, None)
     resp = jsonify({"ok": True, "user": {"email": user["email"], "name": user["name"]}})
     _issue_session(resp, email, user["name"])
@@ -768,10 +818,21 @@ def get_districts(code):
 
 @app.route("/api/orders")
 def get_orders():
-    all_orders = load_orders()
     email = (request.args.get("email") or "").strip().lower()
-    if not email:
-        return jsonify(all_orders)
+    if supabase:
+        try:
+            q = supabase.table("orders").select("*").order("created_at", desc=True)
+            if email: q = q.eq("email", email)
+            r = q.execute()
+            rows = [{"id":o["id"],"date":o.get("date") or o.get("created_at"),"email":o.get("email"),"userName":o.get("user_name"),
+                     "items":o["items"],"subtotal":float(o.get("subtotal") or 0),"discount":float(o.get("discount") or 0),
+                     "shipping":float(o.get("shipping") or 0),"total":float(o.get("total") or 0),"address":o.get("address"),
+                     "paymentMethod":o.get("payment_method"),"status":o.get("status")} for o in (r.data or [])]
+            return jsonify(rows)
+        except Exception as e:
+            print(f"[Supabase] orders list error: {e}", flush=True)
+    all_orders = load_orders()
+    if not email: return jsonify(all_orders)
     filtered = [o for o in all_orders if (o.get("email") or "").lower() == email or (o.get("address", {}).get("email") or "").lower() == email]
     return jsonify(filtered)
 
@@ -779,6 +840,17 @@ def get_orders():
 def get_order(oid):
     import urllib.parse
     oid = urllib.parse.unquote(oid)
+    if supabase:
+        try:
+            r = supabase.table("orders").select("*").eq("id", oid).execute()
+            if r.data:
+                o = r.data[0]
+                return jsonify({"id":o["id"],"date":o.get("date") or o.get("created_at"),"email":o.get("email"),"userName":o.get("user_name"),
+                                "items":o["items"],"subtotal":float(o.get("subtotal") or 0),"discount":float(o.get("discount") or 0),
+                                "shipping":float(o.get("shipping") or 0),"total":float(o.get("total") or 0),"address":o.get("address"),
+                                "paymentMethod":o.get("payment_method"),"status":o.get("status")})
+        except Exception as e:
+            print(f"[Supabase] order get error: {e}", flush=True)
     orders = load_orders()
     for o in orders:
         if o.get("id")==oid or o.get("id")=="#"+oid or o.get("id","").replace("#","")==oid.replace("#",""):
@@ -787,7 +859,6 @@ def get_order(oid):
 
 @app.route("/api/orders", methods=["POST"])
 def create_order():
-    # Rate limit: 10 orders/min per IP
     if not check_rate_limit(request.remote_addr or "unknown", max_req=10, window=60):
         return jsonify({"error":"Too many order attempts, please wait"}), 429
     data = request.get_json() or {}
@@ -802,7 +873,6 @@ def create_order():
         return jsonify({"error":"Complete billing address required"}),400
     if not paymentMethod:
         return jsonify({"error":"paymentMethod required"}),400
-    # Validate phone/pincode/state/district/payment
     import re
     phone = re.sub(r"\D", "", str(address.get("phone","")))
     if not re.fullmatch(r"\d{10}", phone):
@@ -840,9 +910,18 @@ def create_order():
         "paymentMethod": paymentMethod,
         "status": "processing"
     }
-    orders = load_orders()
-    orders.append(order)
-    save_orders(orders)
+    if supabase:
+        try:
+            row = {**order, "user_name": order.pop("userName"), "payment_method": order.pop("paymentMethod")}
+            r = supabase.table("orders").insert(row).execute()
+            if r.data: print(f"[Order] saved to Supabase: {order['id']}", flush=True)
+        except Exception as e:
+            print(f"[Supabase] order insert error: {e}", flush=True)
+            return jsonify({"error": "Failed to save order: " + str(e)}),500
+    else:
+        orders = load_orders()
+        orders.append(order)
+        save_orders(orders)
     return jsonify(order), 201
 
 @app.route("/api/orders/<path:oid>/status", methods=["PUT"])
@@ -853,6 +932,14 @@ def update_order_status(oid):
     status = data.get("status")
     if status not in ["processing","shipped","delivered","cancelled"]:
         return jsonify({"error":"status must be one of processing, shipped, delivered, cancelled"}),400
+    if supabase:
+        try:
+            r = supabase.table("orders").update({"status": status}).eq("id", oid).execute()
+            if r.data:
+                log_audit("order:status", {"id": oid, "status": status}, request.remote_addr or "")
+                return jsonify({"id": oid, "status": status})
+        except Exception as e:
+            print(f"[Supabase] order status error: {e}", flush=True)
     orders = load_orders()
     for o in orders:
         if o.get("id")==oid or o.get("id")=="#"+oid or o.get("id","").replace("#","")==oid.replace("#",""):
@@ -866,6 +953,14 @@ def update_order_status(oid):
 def delete_order(oid):
     import urllib.parse
     oid = urllib.parse.unquote(oid)
+    if supabase:
+        try:
+            r = supabase.table("orders").delete().eq("id", oid).execute()
+            if r.data is not None:
+                log_audit("order:delete", {"id": oid}, request.remote_addr or "")
+                return jsonify({"message":"Order deleted"})
+        except Exception as e:
+            print(f"[Supabase] order delete error: {e}", flush=True)
     orders = load_orders()
     initial=len(orders)
     orders=[o for o in orders if not (o.get("id")==oid or o.get("id")=="#"+oid or o.get("id","").replace("#","")==oid.replace("#",""))]

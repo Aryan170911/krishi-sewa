@@ -1,8 +1,20 @@
 -- Krishi Sewa — Supabase (Postgres) Schema
 -- Run in Supabase Dashboard → SQL Editor → Paste → Run
--- Then set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in .env / hosting env
+-- Then set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in .env / Render env
 
--- Products
+-- ============================================
+-- USERS (auth) — stores email, name, scrypt password hash
+-- ============================================
+CREATE TABLE IF NOT EXISTS users (
+  email TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- PRODUCTS
+-- ============================================
 CREATE TABLE IF NOT EXISTS products (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
@@ -21,10 +33,14 @@ CREATE TABLE IF NOT EXISTS products (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Orders
+-- ============================================
+-- ORDERS (linked to user by email)
+-- ============================================
 CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY, -- #KS-XXXXXX
   date TIMESTAMPTZ DEFAULT NOW(),
+  email TEXT,                          -- FK to users.email (nullable for guest orders)
+  user_name TEXT,
   items JSONB NOT NULL,
   subtotal NUMERIC,
   discount NUMERIC,
@@ -35,8 +51,11 @@ CREATE TABLE IF NOT EXISTS orders (
   status TEXT DEFAULT 'processing',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_orders_email ON orders(email);
 
--- Audit log
+-- ============================================
+-- AUDIT LOG
+-- ============================================
 CREATE TABLE IF NOT EXISTS audit_log (
   id SERIAL PRIMARY KEY,
   timestamp TIMESTAMPTZ DEFAULT NOW(),
@@ -46,11 +65,15 @@ CREATE TABLE IF NOT EXISTS audit_log (
   username TEXT
 );
 
--- Enable RLS (disable for service_role, or add policies)
-ALTER TABLE products DISABLE ROW LEVEL SECURITY;
-ALTER TABLE orders DISABLE ROW LEVEL SECURITY;
+-- ============================================
+-- RLS — service_role bypasses; anon gets nothing
+-- ============================================
+ALTER TABLE users     DISABLE ROW LEVEL SECURITY;
+ALTER TABLE products  DISABLE ROW LEVEL SECURITY;
+ALTER TABLE orders    DISABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_log DISABLE ROW LEVEL SECURITY;
 
--- Seed products (run once)
--- INSERT INTO products (name, description, short_description, price, original_price, image, category, tags, in_stock, rating, review_count, specifications, reviews)
--- VALUES (...) -- will be auto-seeded by backend if empty
+-- ============================================
+-- SEED products — backend auto-seeds if table empty on first GET
+-- (no manual inserts needed)
+-- ============================================

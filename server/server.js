@@ -11,6 +11,7 @@ import { products as seedProducts, categories, events, indianStates, districtsBy
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import { Resend } from "resend";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
@@ -29,6 +30,21 @@ const EMAIL_FROM = process.env.EMAIL_FROM || "Krishi Sewa <onboarding@resend.dev
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 if (resend) console.log("[Email] Resend ready (from: " + EMAIL_FROM + ")");
 else console.log("[Email] Resend NOT configured — set RESEND_API_KEY env (or paste in next deploy)");
+
+// Supabase (Postgres) — primary store for users + orders when configured
+// Secrets stay in env; service_role must NEVER be hardcoded in source
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "https://xypizzylruvgcglhyiyb.supabase.co";
+const SUPABASE_PUBLISHABLE = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
+const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+let supabase = null;
+if (SUPABASE_URL && SUPABASE_SECRET) {
+  try {
+    supabase = createClient(SUPABASE_URL, SUPABASE_SECRET, { auth: { persistSession: false } });
+    console.log(`[Supabase] Connected to ${SUPABASE_URL} as service_role`);
+  } catch (e) { console.warn("[Supabase] init failed, falling back to JSON:", e.message); supabase = null; }
+} else {
+  console.log("[Supabase] Not configured — set SUPABASE_SECRET_KEY env (service_role) for database persistence");
+}
 
 // Razorpay (test keys - replace via .env for prod)
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || "rzp_test_Sv4HWH1qFfP22s";
@@ -260,6 +276,46 @@ function loadAuth() {
   try { return JSON.parse(fs.readFileSync(AUTH_FILE, "utf8")); } catch { return { users: {} }; }
 }
 function saveAuth(a) { try { fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true }); fs.writeFileSync(AUTH_FILE, JSON.stringify(a, null, 2)); } catch (e) { console.warn("auth save failed", e.message); } }
+// User storage: Supabase if configured, else local JSON
+async function findUser(email) {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from("users").select("*").eq("email", email).maybeSingle();
+      if (error) { console.warn("[Supabase] findUser error:", error.message); return null; }
+      return data;
+    } catch (e) { console.warn("[Supabase] findUser exception:", e.message); return null; }
+  }
+  const auth = loadAuth();
+  return auth.users[email] || null;
+}
+async function createUser(user) {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from("users").insert(user).select().single();
+      if (error) { console.warn("[Supabase] createUser error:", error.message); return null; }
+      return data;
+    } catch (e) { console.warn("[Supabase] createUser exception:", e.message); return null; }
+  }
+  const auth = loadAuth();
+  auth.users[user.email] = user;
+  saveAuth(auth);
+  return user;
+}
+async function updateUser(email, patch) {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from("users").update(patch).eq("email", email).select().single();
+      if (error) { console.warn("[Supabase] updateUser error:", error.message); return null; }
+      return data;
+    } catch (e) { console.warn("[Supabase] updateUser exception:", e.message); return null; }
+  }
+  const auth = loadAuth();
+  if (auth.users[email]) {
+    auth.users[email] = { ...auth.users[email], ...patch };
+    saveAuth(auth);
+  }
+  return auth.users[email] || null;
+}
 function getSession(req) {
   const token = (req.headers.cookie || "").split(";").map(s=>s.trim()).find(s=>s.startsWith(SESSION_COOKIE+"="))?.split("=")[1];
   if (!token) return null;
@@ -315,17 +371,17 @@ app.post("/api/auth/signup", loginLimiter, async (req, res) => {
     if (!name) return res.status(400).json({ error: "Name required" });
     const pwErr = validatePassword(password);
     if (pwErr) return res.status(400).json({ error: pwErr });
-    const auth = loadAuth();
-    if (auth.users[email]) return res.status(409).json({ error: "Account already exists with this email — try logging in" });
+    const existing = await findUser(email);
+    if (existing) return res.status(409).json({ error: "Account already exists with this email — try logging in" });
     const code = newCode();
     otpStore.set(email, { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0, name, password, purpose: "signup" });
-    console.log(`[OTP signup] ${email} -> ${code}`);
+    console.log(`[OTP signup] ${email} -> ${code} ${supabase ? '(Supabase)' : '(local JSON)'}`);
     const r = await sendOtpEmail(email, code, name);
     if (r.error) return res.status(502).json({ error: r.error });
     res.json({ ok: true, message: "Code sent to " + email, emailId: r.emailId });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.post("/api/auth/verify-signup", loginLimiter, (req, res) => {
+app.post("/api/auth/verify-signup", loginLimiter, async (req, res) => {
   try {
     const email = String(req.body?.email || "").trim().toLowerCase();
     const code = String(req.body?.code || "").trim();
@@ -335,27 +391,24 @@ app.post("/api/auth/verify-signup", loginLimiter, (req, res) => {
     if (Date.now() > rec.expiresAt) { otpStore.delete(email); return res.status(400).json({ error: "Code expired — restart signup" }); }
     if (rec.attempts >= 5) { otpStore.delete(email); return res.status(429).json({ error: "Too many attempts — restart signup" }); }
     if (rec.code !== code) { rec.attempts++; return res.status(400).json({ error: `Wrong code (${5-rec.attempts} attempts left)` }); }
-    // success — create user
-    const auth = loadAuth();
-    if (auth.users[email]) return res.status(409).json({ error: "Account already exists" });
-    const user = { email, name: rec.name, passwordHash: hashPassword(rec.password), createdAt: new Date().toISOString() };
-    auth.users[email] = user;
-    saveAuth(auth);
+    const existing = await findUser(email);
+    if (existing) return res.status(409).json({ error: "Account already exists" });
+    const user = { email, name: rec.name, password_hash: hashPassword(rec.password), created_at: new Date().toISOString() };
+    await createUser(user);
     otpStore.delete(email);
     issueSession(res, email, rec.name);
     res.json({ ok: true, user: { email: user.email, name: user.name } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.post("/api/auth/login", loginLimiter, (req, res) => {
+app.post("/api/auth/login", loginLimiter, async (req, res) => {
   try {
     const email = String(req.body?.email || "").trim().toLowerCase();
     const password = String(req.body?.password || "");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Valid email required" });
     if (!password) return res.status(400).json({ error: "Password required" });
-    const auth = loadAuth();
-    const user = auth.users[email];
+    const user = await findUser(email);
     if (!user) return res.status(404).json({ error: "No account with this email — sign up first" });
-    if (!verifyPassword(password, user.passwordHash)) return res.status(401).json({ error: "Wrong password — try again or use 'Forgot password?'" });
+    if (!verifyPassword(password, user.password_hash)) return res.status(401).json({ error: "Wrong password — try again or use 'Forgot password?'" });
     issueSession(res, email, user.name);
     res.json({ ok: true, user: { email: user.email, name: user.name } });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -364,8 +417,8 @@ app.post("/api/auth/forgot", loginLimiter, async (req, res) => {
   try {
     const email = String(req.body?.email || "").trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Valid email required" });
-    const auth = loadAuth();
-    if (!auth.users[email]) return res.status(404).json({ error: "No account with this email — sign up first" });
+    const user = await findUser(email);
+    if (!user) return res.status(404).json({ error: "No account with this email — sign up first" });
     const code = newCode();
     otpStore.set(email, { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0, purpose: "reset" });
     console.log(`[OTP reset] ${email} -> ${code}`);
@@ -374,7 +427,7 @@ app.post("/api/auth/forgot", loginLimiter, async (req, res) => {
     res.json({ ok: true, message: "Reset code sent to " + email });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.post("/api/auth/reset-password", loginLimiter, (req, res) => {
+app.post("/api/auth/reset-password", loginLimiter, async (req, res) => {
   try {
     const email = String(req.body?.email || "").trim().toLowerCase();
     const code = String(req.body?.code || "").trim();
@@ -387,12 +440,9 @@ app.post("/api/auth/reset-password", loginLimiter, (req, res) => {
     if (Date.now() > rec.expiresAt) { otpStore.delete(email); return res.status(400).json({ error: "Code expired — request a new one" }); }
     if (rec.attempts >= 5) { otpStore.delete(email); return res.status(429).json({ error: "Too many attempts — request a new code" }); }
     if (rec.code !== code) { rec.attempts++; return res.status(400).json({ error: `Wrong code (${5-rec.attempts} attempts left)` }); }
-    const auth = loadAuth();
-    const user = auth.users[email];
+    const user = await findUser(email);
     if (!user) return res.status(404).json({ error: "Account not found" });
-    user.passwordHash = hashPassword(newPassword);
-    auth.users[email] = user;
-    saveAuth(auth);
+    await updateUser(email, { password_hash: hashPassword(newPassword) });
     otpStore.delete(email);
     issueSession(res, email, user.name);
     res.json({ ok: true, user: { email: user.email, name: user.name } });
@@ -571,35 +621,52 @@ app.get("/api/states/:code/districts", (req, res) => {
 });
 
 // Orders
-app.get("/api/orders", (req, res) => {
-  const all = loadOrders();
+app.get("/api/orders", async (req, res) => {
   const email = (req.query.email || "").toString().trim().toLowerCase();
+  if (supabase) {
+    try {
+      let q = supabase.from("orders").select("*").order("created_at", { ascending: false });
+      if (email) q = q.eq("email", email);
+      const { data, error } = await q;
+      if (error) { console.warn("[Supabase] orders list error:", error.message); return res.json([]); }
+      // Map snake_case columns back to camelCase for frontend compatibility
+      return res.json((data || []).map(o => ({
+        id: o.id, date: o.date || o.created_at, email: o.email, userName: o.user_name,
+        items: o.items, subtotal: Number(o.subtotal), discount: Number(o.discount),
+        shipping: Number(o.shipping), total: Number(o.total), address: o.address,
+        paymentMethod: o.payment_method, status: o.status
+      })));
+    } catch (e) { console.warn("[Supabase] orders exception:", e.message); }
+  }
+  // Fallback: local JSON
+  const all = loadOrders();
   if (!email) return res.json(all);
-  // Match by address.email OR by user email in address OR by phone (fallback for old orders)
-  const filtered = all.filter(o => {
-    const oe = (o.email || o.address?.email || "").toLowerCase();
-    if (oe && oe === email) return true;
-    if (o.address?.phone) {
-      // no email stored — include if user has matching phone from session
-      return false;
-    }
-    return false;
-  });
-  res.json(filtered);
+  return res.json(all.filter(o => (o.email || "").toLowerCase() === email));
 });
-app.get("/api/orders/:id", (req, res) => {
-  const orders = loadOrders();
+app.get("/api/orders/:id", async (req, res) => {
   const id = decodeURIComponent(req.params.id);
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
+      if (data) return res.json({
+        id: data.id, date: data.date || data.created_at, email: data.email, userName: data.user_name,
+        items: data.items, subtotal: Number(data.subtotal), discount: Number(data.discount),
+        shipping: Number(data.shipping), total: Number(data.total), address: data.address,
+        paymentMethod: data.payment_method, status: data.status
+      });
+      if (error && error.code !== "PGRST116") console.warn("[Supabase] order get error:", error.message);
+    } catch (e) { console.warn("[Supabase] order get exception:", e.message); }
+  }
+  const orders = loadOrders();
   const order = orders.find((o) => o.id === id || o.id === "#" + id || o.id.replace("#", "") === id.replace("#", ""));
   if (!order) return res.status(404).json({ error: "Order not found" });
   res.json(order);
 });
-app.post("/api/orders", orderLimiter, (req, res) => {
+app.post("/api/orders", orderLimiter, async (req, res) => {
   const { items, address, paymentMethod } = req.body;
   if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: "Items array required" });
   if (!Array.isArray(items) || items.length > 20) return res.status(400).json({ error: "Too many items (max 20)" });
   if (!address || !address.fullName || !address.phone || !address.address || !address.state || !address.district || !address.pincode) return res.status(400).json({ error: "Complete billing address required" });
-  // Validate phone (10 digits) and pincode (6 digits)
   const phone = String(address.phone).replace(/\D/g, "");
   if (!/^\d{10}$/.test(phone)) return res.status(400).json({ error: "Phone must be 10 digits" });
   if (!/^\d{6}$/.test(String(address.pincode))) return res.status(400).json({ error: "Pincode must be 6 digits" });
@@ -607,7 +674,6 @@ app.post("/api/orders", orderLimiter, (req, res) => {
   if (!validStates.includes(address.state)) return res.status(400).json({ error: "Invalid state code" });
   if (!districtsByState[address.state]?.includes(address.district)) return res.status(400).json({ error: "Invalid district for state" });
   if (!["upi","card","netbanking","cod","razorpay"].includes(paymentMethod)) return res.status(400).json({ error: "Invalid paymentMethod" });
-  // Attach logged-in user email (from session cookie) so order is per-account
   const session = getSession(req);
   const enrichedItems = [];
   for (const item of items) {
@@ -620,28 +686,57 @@ app.post("/api/orders", orderLimiter, (req, res) => {
   }
   const { subtotal, discount, shipping, total } = calculateCartTotal(enrichedItems);
   const order = { id: generateOrderId(), date: new Date().toISOString(), email: session?.email || null, userName: session?.name || null, items: enrichedItems, subtotal, discount, shipping, total, address, paymentMethod, status: "processing" };
-  const orders = loadOrders();
-  orders.push(order);
-  saveOrders(orders);
-  logAudit("order:create", { id: order.id, email: session?.email, total }, req.ip);
+  if (supabase) {
+    try {
+      const { error } = await supabase.from("orders").insert({
+        id: order.id, date: order.date, email: order.email, user_name: order.userName,
+        items: order.items, subtotal: order.subtotal, discount: order.discount,
+        shipping: order.shipping, total: order.total, address: order.address,
+        payment_method: order.paymentMethod, status: order.status
+      });
+      if (error) { console.warn("[Supabase] order insert error:", error.message); return res.status(500).json({ error: "Failed to save order: " + error.message }); }
+    } catch (e) { console.warn("[Supabase] order insert exception:", e.message); return res.status(500).json({ error: e.message }); }
+  } else {
+    const orders = loadOrders();
+    orders.push(order);
+    saveOrders(orders);
+  }
+  logAudit("order:create", { id: order.id, email: session?.email, total, source: supabase ? "supabase" : "json" }, req.ip);
   res.status(201).json(order);
 });
-app.put("/api/orders/:id/status", requireAdmin, (req, res) => {
-  const orders = loadOrders();
+app.put("/api/orders/:id/status", requireAdmin, async (req, res) => {
   const id = decodeURIComponent(req.params.id);
-  const order = orders.find(o => o.id === id || o.id === "#" + id || o.id.replace("#","") === id.replace("#",""));
-  if (!order) return res.status(404).json({ error: "Order not found" });
   const { status } = req.body;
   const valid = ["processing", "shipped", "delivered", "cancelled"];
   if (!valid.includes(status)) return res.status(400).json({ error: `status must be one of ${valid.join(", ")}` });
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from("orders").update({ status }).eq("id", id).select().single();
+      if (!error && data) {
+        logAudit("order:status", { id, status }, req.ip);
+        return res.json({ id: data.id, status: data.status });
+      }
+      if (error && error.code !== "PGRST116") console.warn("[Supabase] order status error:", error.message);
+    } catch (e) { console.warn("[Supabase] order status exception:", e.message); }
+  }
+  const orders = loadOrders();
+  const order = orders.find(o => o.id === id || o.id === "#" + id || o.id.replace("#","") === id.replace("#",""));
+  if (!order) return res.status(404).json({ error: "Order not found" });
   order.status = status;
   saveOrders(orders);
   logAudit("order:status", { id, status }, req.ip);
   res.json(order);
 });
-app.delete("/api/orders/:id", requireAdmin, (req, res) => {
-  let orders = loadOrders();
+app.delete("/api/orders/:id", requireAdmin, async (req, res) => {
   const id = decodeURIComponent(req.params.id);
+  if (supabase) {
+    try {
+      const { error } = await supabase.from("orders").delete().eq("id", id);
+      if (!error) { logAudit("order:delete", { id }, req.ip); return res.json({ message: "Order deleted" }); }
+      console.warn("[Supabase] order delete error:", error.message);
+    } catch (e) { console.warn("[Supabase] order delete exception:", e.message); }
+  }
+  let orders = loadOrders();
   const initialLen = orders.length;
   orders = orders.filter(o => !(o.id === id || o.id === "#" + id || o.id.replace("#","") === id.replace("#","")));
   if (orders.length === initialLen) return res.status(404).json({ error: "Order not found" });

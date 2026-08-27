@@ -95,8 +95,10 @@ const frontendPath = path.join(__dirname, "..", "krishi-sewa-frontend");
 app.use(express.static(frontendPath));
 
 // ============ Helpers for persistence ============
+function ensureDataDir() { try { fs.mkdirSync(path.dirname(ORDERS_FILE), { recursive: true }); } catch {} }
 function loadOrders() {
   try {
+    ensureDataDir();
     if (!fs.existsSync(ORDERS_FILE)) {
       fs.writeFileSync(ORDERS_FILE, JSON.stringify([], null, 2));
       return [];
@@ -110,6 +112,7 @@ function loadOrders() {
 }
 function saveOrders(orders) {
   try {
+    ensureDataDir();
     fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2));
   } catch (e) {
     console.error("Failed to save orders:", e);
@@ -117,6 +120,7 @@ function saveOrders(orders) {
 }
 function loadProducts() {
   try {
+    ensureDataDir();
     if (!fs.existsSync(PRODUCTS_FILE)) {
       fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(seedProducts, null, 2));
       return [...seedProducts];
@@ -135,6 +139,7 @@ function loadProducts() {
 }
 function saveProducts(products) {
   try {
+    ensureDataDir();
     fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(products, null, 2));
   } catch (e) {
     console.error("Failed to save products:", e);
@@ -147,12 +152,14 @@ let products = loadProducts();
 const AUDIT_FILE = path.join(__dirname, "data", "audit.json");
 function loadAudit() {
   try {
+    ensureDataDir();
     if (!fs.existsSync(AUDIT_FILE)) { fs.writeFileSync(AUDIT_FILE, JSON.stringify([], null, 2)); return []; }
     return JSON.parse(fs.readFileSync(AUDIT_FILE, "utf-8"));
   } catch { return []; }
 }
 function logAudit(action, details, ip) {
   try {
+    ensureDataDir();
     const logs = loadAudit();
     logs.push({ timestamp: new Date().toISOString(), action, details, ip, user: ADMIN_USER });
     // keep last 200
@@ -273,7 +280,11 @@ function verifyPassword(password, stored) {
   } catch { return false; }
 }
 function loadAuth() {
-  try { return JSON.parse(fs.readFileSync(AUTH_FILE, "utf8")); } catch { return { users: {} }; }
+  try {
+    ensureDataDir();
+    if (!fs.existsSync(AUTH_FILE)) { fs.writeFileSync(AUTH_FILE, JSON.stringify({ users: {} }, null, 2)); return { users: {} }; }
+    return JSON.parse(fs.readFileSync(AUTH_FILE, "utf8"));
+  } catch { return { users: {} }; }
 }
 function saveAuth(a) { try { fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true }); fs.writeFileSync(AUTH_FILE, JSON.stringify(a, null, 2)); } catch (e) { console.warn("auth save failed", e.message); } }
 // User storage: Supabase if configured, else local JSON

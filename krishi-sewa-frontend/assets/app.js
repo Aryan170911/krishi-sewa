@@ -725,6 +725,31 @@ function handleNewsletter(form) {
   }
 }
 
+// ============================================
+// SKELETON LOADERS — shown while data loads
+// ============================================
+function renderProductCardSkeleton() {
+  return `
+    <div class="bg-surface flex flex-col rounded-2xl border border-outline-variant overflow-hidden p-3 gap-3 h-full">
+      <div class="w-full aspect-[4/3] rounded-xl bg-surface-variant animate-pulse"></div>
+      <div class="space-y-2 px-1">
+        <div class="h-3 w-12 bg-surface-variant rounded animate-pulse"></div>
+        <div class="h-4 w-full bg-surface-variant rounded animate-pulse"></div>
+        <div class="h-4 w-3/4 bg-surface-variant rounded animate-pulse"></div>
+        <div class="h-5 w-1/2 bg-surface-variant rounded animate-pulse mt-2"></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderProductGridSkeleton(count = 8) {
+  return Array(count).fill(0).map(() => renderProductCardSkeleton()).join("");
+}
+
+function renderSkeletonBar(w = "w-full", h = "h-4") {
+  return `<div class="${h} ${w} bg-surface-variant rounded animate-pulse"></div>`;
+}
+
 function renderProductCard(product, compact = false) {
   const discount = product.originalPrice && product.originalPrice > product.price
     ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
@@ -792,6 +817,7 @@ function renderProductCard(product, compact = false) {
 
 function renderHomePage() {
   const featuredProducts = activeProducts.slice(0, 4);
+  const isLoading = !apiAvailable && activeProducts.length === 0;
 
   return `
     <main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-section-gap-mobile md:py-section-gap flex flex-col pb-20 md:pb-0">
@@ -880,10 +906,10 @@ function renderHomePage() {
           </button>
         </div>
         <div class="grid grid-cols-2 md:hidden gap-4">
-          ${featuredProducts.map(p => renderProductCard(p, true)).join("")}
+          ${isLoading ? renderProductGridSkeleton(4) : featuredProducts.map(p => renderProductCard(p, true)).join("")}
         </div>
         <div class="hidden md:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-gutter">
-          ${featuredProducts.map(p => renderProductCard(p)).join("")}
+          ${isLoading ? renderProductGridSkeleton(4) : featuredProducts.map(p => renderProductCard(p)).join("")}
         </div>
       </section>
 
@@ -1116,12 +1142,19 @@ function renderShopPage() {
             </div>
           </div>
 
-          ${products.length === 0 ? `
+          ${products.length === 0 && apiAvailable ? `
             <div class="text-center py-16">
               <span class="material-symbols-outlined text-outline text-6xl mb-4 block">search_off</span>
               <h3 class="font-headline-md text-headline-md text-on-surface-variant mb-2">No products found</h3>
               <p class="font-body-md text-body-md text-on-surface-variant">Try adjusting your filters or search terms</p>
               <button class="mt-4 bg-primary text-on-primary px-6 py-2 rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors" onclick="clearFilters()">Clear All Filters</button>
+            </div>
+          ` : products.length === 0 ? `
+            <div class="grid grid-cols-2 lg:hidden gap-4">
+              ${renderProductGridSkeleton(6)}
+            </div>
+            <div class="hidden lg:grid lg:grid-cols-3 gap-gutter">
+              ${renderProductGridSkeleton(6)}
             </div>
           ` : `
             <div class="grid grid-cols-2 lg:hidden gap-4">
@@ -3003,11 +3036,11 @@ function renderApp() {
   if (!app) return;
 
   let pageContent = '';
-
-  switch (state.currentPage) {
-    case 'home':
-      pageContent = renderHomePage();
-      break;
+  try {
+    switch (state.currentPage) {
+      case 'home':
+        pageContent = renderHomePage();
+        break;
     case 'shop':
       pageContent = renderShopPage();
       break;
@@ -3050,9 +3083,27 @@ function renderApp() {
     default:
       pageContent = render404Page();
   }
+  } catch (e) {
+    console.error("Render error:", e);
+    pageContent = `
+      <main class="flex-grow w-full max-w-md mx-auto px-4 py-12 text-center">
+        <div class="bg-white border border-error rounded-2xl p-8">
+          <span class="material-symbols-outlined text-error text-5xl">error</span>
+          <h1 class="text-xl font-bold text-error mt-3">Couldn't load this page</h1>
+          <p class="text-on-surface-variant mt-2 text-sm">${escapeHtml(e.message || 'Unknown error')}</p>
+          <button onclick="location.reload()" class="mt-4 w-full bg-primary text-on-primary py-2 rounded-lg font-semibold">Reload</button>
+          <button onclick="navigateTo('home')" class="mt-2 w-full border border-outline-variant py-2 rounded-lg font-semibold">Go Home</button>
+        </div>
+      </main>`;
+  }
 
-  app.innerHTML = renderNav() + pageContent + renderFooter() + renderMobileBottomNav() + renderSupportWidget() + renderBackToTop();
-  setupBackToTop();
+  try {
+    app.innerHTML = renderNav() + pageContent + renderFooter() + renderMobileBottomNav() + renderSupportWidget() + renderBackToTop();
+    setupBackToTop();
+  } catch (e) {
+    console.error("Render injection error:", e);
+    app.innerHTML = `<main class="p-8 text-center"><p class="text-error">Failed to render: ${escapeHtml(e.message)}</p></main>`;
+  }
 }
 
 // ============================================
@@ -3060,6 +3111,9 @@ function renderApp() {
 // ============================================
 
 async function init() {
+  // Set up global error boundary
+  setupErrorBoundary();
+
   // Load persisted data
   loadCart();
   loadOrders();
@@ -3071,8 +3125,16 @@ async function init() {
   handleHashChange();
 
   // Init Auth + backend sync
-  await initAuth();
-  await syncFromBackend();
+  try {
+    await initAuth();
+  } catch (e) {
+    console.warn("Auth init failed:", e);
+  }
+  try {
+    await syncFromBackend();
+  } catch (e) {
+    console.warn("Backend sync failed:", e);
+  }
   // Re-render to show backend data
   renderApp();
 
@@ -3098,6 +3160,38 @@ async function init() {
   console.log('Design System: Google Stitch / Material 3');
   console.log('Colors: Primary #012d1d, Secondary #645e49');
   console.log('Fonts: Source Serif 4 (headlines), Plus Jakarta Sans (body)');
+}
+
+// Global error boundary — catch uncaught errors and show a friendly message
+function setupErrorBoundary() {
+  window.addEventListener('error', (event) => {
+    console.error('Uncaught error:', event.error);
+    showFatalError(event.error?.message || 'Something went wrong');
+  });
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled promise rejection:', event.reason);
+    // Don't show for network errors that we already handle gracefully
+    if (event.reason && !String(event.reason.message).includes('fetch')) {
+      showFatalError(event.reason.message || 'Network error');
+    }
+  });
+}
+
+function showFatalError(message) {
+  const app = document.getElementById('app');
+  if (!app) return;
+  app.innerHTML = `
+    <main class="flex-grow w-full max-w-md mx-auto px-4 py-12 text-center">
+      <div class="bg-white border border-error rounded-2xl p-8">
+        <span class="material-symbols-outlined text-error text-5xl">error</span>
+        <h1 class="text-2xl font-bold text-error mt-3">Something went wrong</h1>
+        <p class="text-on-surface-variant mt-2 text-sm">${escapeHtml(message)}</p>
+        <button onclick="location.reload()" class="mt-6 w-full bg-primary text-on-primary py-3 rounded-lg font-semibold flex items-center justify-center gap-2">
+          <span class="material-symbols-outlined">refresh</span> Reload page
+        </button>
+        <button onclick="localStorage.clear(); location.reload();" class="mt-2 w-full text-sm text-on-surface-variant hover:text-error">Clear local data and reload</button>
+      </div>
+    </main>`;
 }
 
 // Start the app when DOM is ready

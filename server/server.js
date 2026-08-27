@@ -70,6 +70,15 @@ app.use(cors({
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 
+// Security headers (lightweight helmet-like)
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  next();
+});
+
 // Rate limiting
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -89,6 +98,13 @@ const loginLimiter = rateLimit({
   message: { error: "Too many login attempts, please try again later" }
 });
 app.use("/api/", apiLimiter);
+
+// Request ID middleware — useful for tracing in logs
+app.use((req, res, next) => {
+  req.id = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  res.setHeader("X-Request-Id", req.id);
+  next();
+});
 
 // Serve frontend static files
 const frontendPath = path.join(__dirname, "..", "krishi-sewa-frontend");

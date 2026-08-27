@@ -2441,7 +2441,7 @@ async function placeOrder() {
     // After successful order, if logged in, refresh orders from server so they sync across devices
     if (state.authUser?.email) {
       try {
-        const remote = await apiGet("/orders?email=" + encodeURIComponent(state.authUser.email));
+        const remote = await apiGet("/orders");
         if (Array.isArray(remote)) { state.orders = remote; saveOrders(); }
       } catch {}
     }

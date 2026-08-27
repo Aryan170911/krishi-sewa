@@ -1002,14 +1002,13 @@ app.get("/api/pincode/:pin", async (req, res) => {
 
 // Orders
 app.get("/api/orders", async (req, res) => {
-  const email = (req.query.email || "").toString().trim().toLowerCase();
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  const email = sess.email.toLowerCase();
   if (supabase) {
     try {
-      let q = supabase.from("orders").select("*").order("created_at", { ascending: false });
-      if (email) q = q.eq("email", email);
-      const { data, error } = await q;
+      const { data, error } = await supabase.from("orders").select("*").eq("email", email).order("created_at", { ascending: false });
       if (error) { console.warn("[Supabase] orders list error:", error.message); return res.json([]); }
-      // Map snake_case columns back to camelCase for frontend compatibility
       return res.json((data || []).map(o => ({
         id: o.id, date: o.date || o.created_at, email: o.email, userName: o.user_name,
         items: o.items, subtotal: Number(o.subtotal), discount: Number(o.discount),
@@ -1020,26 +1019,32 @@ app.get("/api/orders", async (req, res) => {
   }
   // Fallback: local JSON
   const all = loadOrders();
-  if (!email) return res.json(all);
   return res.json(all.filter(o => (o.email || "").toLowerCase() === email));
 });
 app.get("/api/orders/:id", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
   const id = decodeURIComponent(req.params.id);
+  const userEmail = sess.email.toLowerCase();
   if (supabase) {
     try {
       const { data, error } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
-      if (data) return res.json({
-        id: data.id, date: data.date || data.created_at, email: data.email, userName: data.user_name,
-        items: data.items, subtotal: Number(data.subtotal), discount: Number(data.discount),
-        shipping: Number(data.shipping), total: Number(data.total), address: data.address,
-        paymentMethod: data.payment_method, status: data.status
-      });
       if (error && error.code !== "PGRST116") console.warn("[Supabase] order get error:", error.message);
+      if (data) {
+        if ((data.email || "").toLowerCase() !== userEmail) return res.status(403).json({ error: "Forbidden" });
+        return res.json({
+          id: data.id, date: data.date || data.created_at, email: data.email, userName: data.user_name,
+          items: data.items, subtotal: Number(data.subtotal), discount: Number(data.discount),
+          shipping: Number(data.shipping), total: Number(data.total), address: data.address,
+          paymentMethod: data.payment_method, status: data.status
+        });
+      }
     } catch (e) { console.warn("[Supabase] order get exception:", e.message); }
   }
   const orders = loadOrders();
   const order = orders.find((o) => o.id === id || o.id === "#" + id || o.id.replace("#", "") === id.replace("#", ""));
   if (!order) return res.status(404).json({ error: "Order not found" });
+  if ((order.email || "").toLowerCase() !== userEmail) return res.status(403).json({ error: "Forbidden" });
   res.json(order);
 });
 app.post("/api/orders", orderLimiter, async (req, res) => {

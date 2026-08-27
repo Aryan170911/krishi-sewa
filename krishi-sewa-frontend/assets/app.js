@@ -3098,8 +3098,13 @@ function renderApp() {
   }
 
   try {
-    app.innerHTML = renderNav() + pageContent + renderFooter() + renderMobileBottomNav() + renderSupportWidget() + renderBackToTop();
+    // Skip link for screen readers and keyboard users
+    const skipLink = '<a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[200] focus:bg-primary focus:text-on-primary focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg">Skip to main content</a>';
+    app.innerHTML = skipLink + renderNav() + pageContent + renderFooter() + renderMobileBottomNav() + renderSupportWidget() + renderBackToTop();
     setupBackToTop();
+    // Add id="main-content" to the first <main> in pageContent for skip link target
+    const firstMain = app.querySelector('main');
+    if (firstMain && !firstMain.id) firstMain.id = 'main-content';
   } catch (e) {
     console.error("Render injection error:", e);
     app.innerHTML = `<main class="p-8 text-center"><p class="text-error">Failed to render: ${escapeHtml(e.message)}</p></main>`;

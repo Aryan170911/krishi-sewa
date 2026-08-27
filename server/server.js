@@ -92,7 +92,17 @@ app.use("/api/", apiLimiter);
 
 // Serve frontend static files
 const frontendPath = path.join(__dirname, "..", "krishi-sewa-frontend");
-app.use(express.static(frontendPath));
+app.use(express.static(frontendPath, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith(".html") || filePath.endsWith("/")) {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+    } else if (/\.(js|css)$/.test(filePath)) {
+      res.setHeader("Cache-Control", "public, max-age=300");
+    }
+  }
+}));
 
 // ============ Helpers for persistence ============
 function ensureDataDir() { try { fs.mkdirSync(path.dirname(ORDERS_FILE), { recursive: true }); } catch {} }

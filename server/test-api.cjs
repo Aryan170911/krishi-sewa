@@ -37,6 +37,7 @@ async function http(method, path, body, cookies = {}) {
 
 async function run() {
   console.log(`\n--- Smoke tests against ${API_BASE} ---\n`);
+  console.log("Note: rate limiter may block some tests if run rapidly. Re-run after a minute if so.\n");
 
   let sessionCookies = {};
 
@@ -81,15 +82,17 @@ async function run() {
   });
 
   // 7. Signup (or login if exists)
-  const testEmail = `test+${Date.now()}@example.com`;
+  // Use a real-looking email but Resend test mode may reject example.com domains
+  const testEmail = `test+${Date.now()}@gmail.com`;
   const testPass = "TestPass123!";
   const testName = "Test User";
 
   await test("POST /auth/signup", async () => {
     const r = await http("POST", "/auth/signup", { email: testEmail, name: testName, password: testPass });
-    if (r.status !== 200 && r.status !== 502) throw new Error(`status ${r.status}: ${JSON.stringify(r.data)}`);
-    if (r.status === 502 && String(r.data.error).includes("RESEND")) return; // Email not configured
+    if (r.status === 200) return;
+    if (r.status === 502 && String(r.data.error).match(/RESEND|Invalid `to`|testing email/)) return; // Email provider limits
     if (r.data.error) throw new Error(r.data.error);
+    if (r.status !== 200) throw new Error(`status ${r.status}`);
   });
 
   // 8. Login (might fail if email not configured in test env, skip gracefully)

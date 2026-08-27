@@ -645,9 +645,11 @@ bootstrapAdmin();
 async function syncProductsToSupabase() {
   if (!supabase) return;
   try {
-    const { data, error } = await supabase.from("products").select("id", { count: "exact", head: true });
-    if (error) { console.warn("[Supabase] products count check:", error.message); return; }
-    if (data && data.length === 0) {
+    // Use count via headers to get the actual count, not array length
+    const res = await supabase.from("products").select("id", { count: "exact", head: true });
+    const count = res.count ?? (res.data ? res.data.length : 0);
+    if (res.error) { console.warn("[Supabase] products count check:", res.error.message); return; }
+    if (count === 0) {
       console.log("[Supabase] No products in DB, seeding from local...");
       for (const p of products) {
         await supabase.from("products").insert({
@@ -660,7 +662,7 @@ async function syncProductsToSupabase() {
       }
       console.log(`[Supabase] Seeded ${products.length} products`);
     } else {
-      console.log(`[Supabase] Products already in DB (${data?.length || 0}), skipping seed`);
+      console.log(`[Supabase] Products already in DB (${count}), skipping seed`);
     }
   } catch (e) { console.warn("[Supabase] syncProductsToSupabase:", e.message); }
 }
@@ -781,6 +783,52 @@ async function sendOtpEmail(email, code, name) {
     if (error) return { error: "Failed to send email: " + (error.message || "unknown") };
     return { ok: true, emailId: data?.id };
   } catch (e) { return { error: e.message }; }
+}
+
+async function sendOrderEmail(email, order, eventType) {
+  if (!resend) return;
+  const subjects = {
+    created: `Order ${order.id} confirmed — Krishi Sewa`,
+    processing: `Your order ${order.id} is being prepared`,
+    shipped: `Your order ${order.id} has been shipped!`,
+    delivered: `Your order ${order.id} has been delivered`,
+    cancelled: `Your order ${order.id} was cancelled`
+  };
+  const bodies = {
+    created: `Thank you for your order! We'll process it shortly.`,
+    processing: `Our team is preparing your items for shipment.`,
+    shipped: `Your package is on its way! Track it in your orders.`,
+    delivered: `Your order has been delivered. Thank you for shopping with Krishi Sewa!`,
+    cancelled: `Your order has been cancelled. Refund (if any) will be processed in 3-5 business days.`
+  };
+  try {
+    const { data, error } = await resend.emails.send({
+      from: EMAIL_FROM,
+      to: [email],
+      subject: subjects[eventType] || `Order ${order.id} update`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#f5f5f0;border-radius:12px">
+        <h2 style="color:#012d1d;margin:0 0 8px">${subjects[eventType] || "Order update"}</h2>
+        <p style="color:#333;margin:0 0 16px">${bodies[eventType] || "Your order has been updated."}</p>
+        <div style="background:#fff;padding:16px;border-radius:8px;margin:16px 0">
+          <p style="margin:0"><b>Order ID:</b> ${order.id}</p>
+          <p style="margin:4px 0"><b>Total:</b> ₹${order.total}</p>
+          <p style="margin:0"><b>Status:</b> ${order.status || eventType}</p>
+        </div>
+        <p style="color:#666;margin:16px 0 0;font-size:13px">View your orders: https://krishi-sewa.onrender.com/#orders</p>
+        <p style="color:#999;margin:24px 0 0;font-size:11px">Krishi Sewa Foundation — heritage seeds, pure spices, real impact.</p>
+      </div>`,
+      text: `${bodies[eventType] || "Order update"}\n\nOrder: ${order.id}\nTotal: ₹${order.total}\nStatus: ${order.status || eventType}`
+    });
+    if (supabase) {
+      await supabase.from("email_notifications").insert({
+        recipient: email, subject: subjects[eventType] || "Order update",
+        template: `order_${eventType}`, resend_id: data?.id || null,
+        status: error ? "failed" : "sent", error_message: error?.message || null,
+        metadata: { order_id: order.id, total: order.total }
+      }).catch(() => {});
+    }
+    if (error) console.warn("[Resend] order email:", error.message);
+  } catch (e) { console.warn("[Resend] order email exception:", e.message); }
 }
 
 // ============================================
@@ -1737,6 +1785,7 @@ app.post("/api/orders", orderLimiter, async (req, res) => {
   logAudit("order:create", { id: order.id, email: session?.email, total, source: supabase ? "supabase" : "json" }, req.ip);
   newOrderEvent(order.id, "created", session?.email, "user", { total, paymentMethod });
   fireWebhooks("order.created", { id: order.id, email: order.email, total, status: order.status });
+  if (order.email) sendOrderEmail(order.email, order, "created");
   res.status(201).json(order);
 });
 app.put("/api/orders/:id/status", requireAdmin, async (req, res) => {
@@ -1751,6 +1800,7 @@ app.put("/api/orders/:id/status", requireAdmin, async (req, res) => {
         logAudit("order:status", { id, status }, req.ip);
         newOrderEvent(id, status, req.adminEmail, "admin", { from: data.status });
         fireWebhooks(`order.${status}`, { id, status });
+        if (data.email) sendOrderEmail(data.email, data, status);
         return res.json({ id: data.id, status: data.status });
       }
       if (error && error.code !== "PGRST116") console.warn("[Supabase] order status error:", error.message);
@@ -1764,6 +1814,7 @@ app.put("/api/orders/:id/status", requireAdmin, async (req, res) => {
   saveOrders(orders);
   logAudit("order:status", { id, status }, req.ip);
   newOrderEvent(id, status, req.adminEmail, "admin", { from: oldStatus });
+  if (order.email) sendOrderEmail(order.email, order, status);
   res.json(order);
 });
 app.delete("/api/orders/:id", requireAdmin, async (req, res) => {

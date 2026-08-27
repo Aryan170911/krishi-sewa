@@ -576,9 +576,9 @@ function renderMobileDrawer() {
     { page: "about", icon: "groups", label: "About Us" }
   ];
   if (state.authUser) {
-    drawerLinks.push({ page: "auth", icon: "verified_user", label: (state.authUser.email || "Account").split("@")[0] });
+    drawerLinks.push({ page: "auth", icon: "verified_user", label: (state.authUser.name || "Account") });
   } else {
-    drawerLinks.push({ page: "auth", icon: "login", label: "Login / Signup" });
+    drawerLinks.push({ page: "auth", icon: "login", label: "Login / Sign Up" });
   }
 
   return `
@@ -621,7 +621,7 @@ function renderMobileBottomNav() {
     { page: "orders", icon: "package_2", label: "Orders" }
   ];
 
-  const hideOnPages = ["checkout", "confirmation"];
+  const hideOnPages = ["checkout", "confirmation", "auth", "coming-soon"];
   if (hideOnPages.includes(state.currentPage)) return "";
 
   return `
@@ -743,8 +743,8 @@ function renderHomePage() {
               <button class="w-full bg-primary-container text-surface-container-lowest font-label-md text-label-md min-h-[48px] rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform" onclick="navigateTo('shop')">
                 Shop Now
               </button>
-              <button class="w-full border-2 border-surface-container-low text-surface-container-lowest font-label-md text-label-md min-h-[48px] rounded-xl active:scale-95 hover:bg-surface-container-low/10 transition-colors" onclick="navigateTo('about')">
-                Register
+              <button class="w-full border-2 border-surface-container-low text-surface-container-lowest font-label-md text-label-md min-h-[48px] rounded-xl active:scale-95 hover:bg-surface-container-low/10 transition-colors" onclick="navigateTo('coming-soon')">
+                Join Waitlist
               </button>
             </div>
           </div>
@@ -852,7 +852,7 @@ function renderHomePage() {
                   <div class="text-label-sm font-label-sm text-on-surface-variant">
                     ${event.registered}/${event.capacity} registered
                   </div>
-                  <button class="bg-primary text-on-primary px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors">
+                  <button class="bg-primary text-on-primary px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors" onclick="navigateTo('coming-soon')">
                     Register
                   </button>
                 </div>
@@ -1839,9 +1839,9 @@ function renderAuthPage() {
   }
   const mode = state.authMode;
   return `
-  <main class="flex-grow w-full max-w-md mx-auto px-4 py-8">
-    <div class="bg-white border border-outline-variant rounded-2xl p-6">
-      <h1 class="text-2xl font-bold text-primary text-center">${mode==="signup" ? "Create Account" : mode==="verify" ? "Verify Your Email" : mode==="forgot" ? "Reset Password" : mode==="reset" ? "Set New Password" : "Welcome back"}</h1>
+  <main class="flex-grow w-full max-w-md mx-auto px-4 py-4 md:py-8 pb-24 md:pb-8">
+    <div class="bg-white border border-outline-variant rounded-2xl p-5 md:p-6 shadow-sm">
+      <h1 class="text-xl md:text-2xl font-bold text-primary text-center">${mode==="signup" ? "Create Account" : mode==="verify" ? "Verify Your Email" : mode==="forgot" ? "Reset Password" : mode==="reset" ? "Set New Password" : "Welcome back"}</h1>
       <p class="text-center text-on-surface-variant text-sm mb-6">${mode==="signup" ? "Sign up once — secure password + email verification" : mode==="verify" ? `Enter the 6-digit code we sent to <b>${state.authPendingEmail}</b>` : mode==="forgot" ? "We'll email a code to reset your password" : mode==="reset" ? "Choose a strong new password" : "Log in with email + password"}</p>
       ${(mode==="login" || mode==="signup") ? `
         <div class="flex gap-2 mb-6">
@@ -1850,10 +1850,10 @@ function renderAuthPage() {
         </div>` : ""}
       ${mode==="signup" ? `
         <form onsubmit="handleSignup(event)" class="space-y-3">
-          <input id="authName" placeholder="Full name" required class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <input id="authEmail" type="email" required placeholder="Your email" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <input id="authName" placeholder="Full name" required class="w-full text-base border border-outline-variant rounded-lg px-3 py-3 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
+          <input id="authEmail" type="email" required placeholder="Your email" class="w-full text-base border border-outline-variant rounded-lg px-3 py-3 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
           <div>
-            <input id="authPassword" type="password" required minlength="8" placeholder="Password (8+ chars)" oninput="updatePwStrength(this.value)" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+            <input id="authPassword" type="password" required minlength="8" placeholder="Password (8+ chars)" oninput="updatePwStrength(this.value)" class="w-full text-base border border-outline-variant rounded-lg px-3 py-3 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
             <div class="mt-2 space-y-1 text-xs">
               <div class="flex gap-1 h-1.5">
                 <div id="pwBar1" class="flex-1 rounded bg-surface-variant"></div>
@@ -1876,7 +1876,7 @@ function renderAuthPage() {
         </form>
       ` : mode==="verify" ? `
         <div class="space-y-3">
-          <input id="authCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000" class="w-full text-center text-3xl tracking-[0.5em] font-bold border-2 border-primary rounded-lg px-3 py-4">
+          <input id="authCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000" class="w-full text-center text-2xl md:text-3xl tracking-[0.4em] md:tracking-[0.5em] font-bold border-2 border-primary rounded-lg px-2 py-4 focus:outline-none focus:ring-2 focus:ring-primary">
           <button onclick="handleVerifyCode()" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Verify & Create Account</button>
           <button onclick="handleResendCode()" type="button" class="w-full border border-outline-variant py-2.5 rounded-lg font-semibold">Resend Code</button>
           <p id="authMsg" class="text-center text-sm"></p>
@@ -1885,16 +1885,16 @@ function renderAuthPage() {
       ` : mode==="forgot" ? `
         <form onsubmit="handleForgot(event)" class="space-y-3">
           <p class="text-sm text-on-surface-variant text-center">Enter your account email — we'll send a 6-digit code to reset your password.</p>
-          <input id="authEmail" type="email" required placeholder="Your email" value="${state.authPendingEmail||''}" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <input id="authEmail" type="email" required placeholder="Your email" value="${state.authPendingEmail||''}" class="w-full text-base border border-outline-variant rounded-lg px-3 py-3 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
           <button type="submit" class="w-full bg-accent-ochre text-white py-3 rounded-lg font-bold">Send Reset Code</button>
           <p id="authMsg" class="text-center text-sm"></p>
           <button type="button" onclick="state.authMode='login'; renderApp()" class="w-full text-sm text-on-surface-variant hover:text-primary">← Back to login</button>
         </form>
       ` : mode==="reset" ? `
         <form onsubmit="handleResetPassword(event)" class="space-y-3">
-          <input id="authCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required placeholder="6-digit code" class="w-full text-center text-2xl tracking-[0.5em] font-bold border-2 border-primary rounded-lg px-3 py-4">
+          <input id="authCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required placeholder="6-digit code" class="w-full text-center text-xl md:text-2xl tracking-[0.4em] md:tracking-[0.5em] font-bold border-2 border-primary rounded-lg px-2 py-4 focus:outline-none focus:ring-2 focus:ring-primary">
           <div>
-            <input id="authPassword" type="password" required minlength="8" placeholder="New password" oninput="updatePwStrength(this.value)" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+            <input id="authPassword" type="password" required minlength="8" placeholder="New password" oninput="updatePwStrength(this.value)" class="w-full text-base border border-outline-variant rounded-lg px-3 py-3 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
             <div class="mt-2 space-y-1 text-xs">
               <div class="flex gap-1 h-1.5">
                 <div id="pwBar1" class="flex-1 rounded bg-surface-variant"></div>
@@ -1917,8 +1917,8 @@ function renderAuthPage() {
         </form>
       ` : `
         <form onsubmit="handleLogin(event)" class="space-y-3">
-          <input id="authEmail" type="email" required placeholder="Your email" value="${state.authPendingEmail||''}" class="w-full border border-outline-variant rounded-lg px-3 py-3">
-          <input id="authPassword" type="password" required placeholder="Your password" class="w-full border border-outline-variant rounded-lg px-3 py-3">
+          <input id="authEmail" type="email" required placeholder="Your email" value="${state.authPendingEmail||''}" class="w-full text-base border border-outline-variant rounded-lg px-3 py-3 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
+          <input id="authPassword" type="password" required placeholder="Your password" class="w-full text-base border border-outline-variant rounded-lg px-3 py-3 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
           <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-bold">Log In</button>
           <p id="authMsg" class="text-center text-sm"></p>
           <div class="text-center">
@@ -2149,6 +2149,10 @@ function handleHashChange() {
       break;
     case 'auth':
       state.currentPage = 'auth';
+      renderApp();
+      break;
+    case 'coming-soon':
+      state.currentPage = 'coming-soon';
       renderApp();
       break;
     case '404':
@@ -2462,6 +2466,48 @@ function render404Page() {
   `;
 }
 
+function renderComingSoonPage() {
+  return `
+    <main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-section-gap-mobile md:py-section-gap flex flex-col items-center text-center pb-24 md:pb-0">
+      <div class="bg-primary-container rounded-full p-5 md:p-6 mb-6 mt-4">
+        <span class="material-symbols-outlined text-primary text-5xl md:text-6xl">hourglass_top</span>
+      </div>
+      <h1 class="font-headline-lg md:font-headline-xl text-headline-lg md:text-headline-xl text-primary mb-3">Coming Soon</h1>
+      <p class="font-body-md md:font-body-lg text-body-md md:text-body-lg text-on-surface-variant mb-2 max-w-md">
+        Our farmer registration and event RSVP system is being prepared with care.
+      </p>
+      <p class="font-body-md text-body-md text-on-surface-variant mb-8 max-w-md">
+        Sign up to our shop and we'll let you know the moment it opens.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-3 w-full max-w-sm">
+        <button class="flex-1 bg-primary text-on-primary px-6 py-3 rounded-lg font-semibold hover:bg-primary/90 transition-colors min-h-[48px]" onclick="navigateTo('shop')">
+          <span class="material-symbols-outlined align-middle mr-1">storefront</span> Browse Shop
+        </button>
+        <button class="flex-1 border border-outline-variant px-6 py-3 rounded-lg font-semibold hover:bg-surface-variant transition-colors min-h-[48px]" onclick="navigateTo('home')">
+          Go Home
+        </button>
+      </div>
+      <div class="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 w-full max-w-3xl">
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 text-left">
+          <span class="material-symbols-outlined text-primary text-3xl mb-2 block">groups</span>
+          <h3 class="font-headline-sm text-headline-sm text-primary mb-1">Farmer Network</h3>
+          <p class="text-body-sm text-body-sm text-on-surface-variant">Connect with 50,000+ farmers across India.</p>
+        </div>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 text-left">
+          <span class="material-symbols-outlined text-primary text-3xl mb-2 block">school</span>
+          <h3 class="font-headline-sm text-headline-sm text-primary mb-1">Training</h3>
+          <p class="text-body-sm text-body-sm text-on-surface-variant">Heritage seed workshops &amp; field events.</p>
+        </div>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 text-left">
+          <span class="material-symbols-outlined text-primary text-3xl mb-2 block">savings</span>
+          <h3 class="font-headline-sm text-headline-sm text-primary mb-1">Direct Trade</h3>
+          <p class="text-body-sm text-body-sm text-on-surface-variant">Better prices, no middlemen.</p>
+        </div>
+      </div>
+    </main>
+  `;
+}
+
 // ============================================
 // MAIN RENDER FUNCTION
 // ============================================
@@ -2499,6 +2545,9 @@ function renderApp() {
       break;
     case 'auth':
       pageContent = renderAuthPage();
+      break;
+    case 'coming-soon':
+      pageContent = renderComingSoonPage();
       break;
     case '404':
       pageContent = render404Page();

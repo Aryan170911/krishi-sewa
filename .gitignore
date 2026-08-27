@@ -1,6 +1,7 @@
 ﻿node_modules/
 server/data/orders.json
 server/data/products.json
+server/data/auth.json
 *.log
 .DS_Store
 .env

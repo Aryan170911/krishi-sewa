@@ -975,10 +975,18 @@ app.post("/api/auth/resend-code", loginLimiter, async (req, res) => {
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.get("/api/auth/me", (req, res) => {
+app.get("/api/auth/me", async (req, res) => {
   const s = getSession(req);
   if (!s) return res.status(401).json({ user: null });
-  res.json({ user: { email: s.email, name: s.name } });
+  // Enrich with email_verified status from Supabase
+  let email_verified = true;
+  if (supabase) {
+    try {
+      const { data } = await supabase.from("users").select("email_verified").eq("email", s.email).is("deleted_at", null).maybeSingle();
+      email_verified = data?.email_verified !== false; // default true if not set
+    } catch {}
+  }
+  res.json({ user: { email: s.email, name: s.name, email_verified } });
 });
 app.post("/api/auth/logout", (req, res) => {
   const s = getSession(req);

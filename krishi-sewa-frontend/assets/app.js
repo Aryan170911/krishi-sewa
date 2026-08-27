@@ -1290,19 +1290,29 @@ function renderProductPage() {
             </button>
           </div>
 
-          <!-- Trust Badges -->
-          <div class="border-t border-outline-variant pt-6 flex flex-wrap gap-4">
-            <div class="flex items-center gap-2 text-body-sm font-body-sm text-on-surface-variant">
-              <span class="material-symbols-outlined text-primary">verified_user</span> Quality Guaranteed
+          <!-- Trust Badges + Share -->
+          <div class="border-t border-outline-variant pt-6">
+            <div class="flex flex-wrap gap-4 mb-3">
+              <div class="flex items-center gap-2 text-body-sm font-body-sm text-on-surface-variant">
+                <span class="material-symbols-outlined text-primary">verified_user</span> Quality Guaranteed
+              </div>
+              <div class="flex items-center gap-2 text-body-sm font-body-sm text-on-surface-variant">
+                <span class="material-symbols-outlined text-primary">local_shipping</span> Free Shipping on ₹2000+
+              </div>
+              <div class="flex items-center gap-2 text-body-sm font-body-sm text-on-surface-variant">
+                <span class="material-symbols-outlined text-primary">undo</span> Easy Returns
+              </div>
+              <div class="flex items-center gap-2 text-body-sm font-body-sm text-on-surface-variant">
+                <span class="material-symbols-outlined text-primary">support_agent</span> Farmer Support
+              </div>
             </div>
-            <div class="flex items-center gap-2 text-body-sm font-body-sm text-on-surface-variant">
-              <span class="material-symbols-outlined text-primary">local_shipping</span> Free Shipping on ₹2000+
-            </div>
-            <div class="flex items-center gap-2 text-body-sm font-body-sm text-on-surface-variant">
-              <span class="material-symbols-outlined text-primary">undo</span> Easy Returns
-            </div>
-            <div class="flex items-center gap-2 text-body-sm font-body-sm text-on-surface-variant">
-              <span class="material-symbols-outlined text-primary">support_agent</span> Farmer Support
+            <div class="flex gap-2">
+              <button onclick="shareProduct(${product.id})" class="flex-1 sm:flex-none border border-outline-variant px-4 py-2 rounded-lg text-sm font-semibold hover:bg-surface-variant flex items-center justify-center gap-1">
+                <span class="material-symbols-outlined text-[18px]">share</span> Share
+              </button>
+              <button onclick="copyProductLink(${product.id})" class="flex-1 sm:flex-none border border-outline-variant px-4 py-2 rounded-lg text-sm font-semibold hover:bg-surface-variant flex items-center justify-center gap-1">
+                <span class="material-symbols-outlined text-[18px]">link</span> Copy Link
+              </button>
             </div>
           </div>
         </div>
@@ -2566,6 +2576,44 @@ async function applyPromoCode() {
   } catch (e) {
     msg.innerHTML = `<span class="text-error">${escapeHtml(e.message)}</span>`;
   }
+}
+
+function shareProduct(productId) {
+  const product = getProductById(productId);
+  if (!product) return;
+  const url = window.location.origin + window.location.pathname + `#product/${productId}`;
+  const text = `Check out ${product.name} on Krishi Sewa — ${formatPrice(product.price)}`;
+  if (navigator.share) {
+    navigator.share({ title: product.name, text, url }).catch(() => copyToClipboard(text + "\n" + url));
+  } else {
+    copyToClipboard(text + "\n" + url);
+    toast("Copied to clipboard");
+  }
+}
+
+function copyProductLink(productId) {
+  const url = window.location.origin + window.location.pathname + `#product/${productId}`;
+  copyToClipboard(url);
+  toast("Link copied!");
+}
+
+function copyToClipboard(text) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand("copy"); } catch {}
+  document.body.removeChild(ta);
 }
 
 // ============================================

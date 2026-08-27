@@ -687,7 +687,7 @@ function saveAuth(a) { try { fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: 
 async function findUser(email) {
   if (supabase) {
     try {
-      const { data, error } = await supabase.from("users").select("*").eq("email", email).maybeSingle();
+      const { data, error } = await supabase.from("users").select("*").eq("email", email).is("deleted_at", null).maybeSingle();
       if (error) { console.warn("[Supabase] findUser error:", error.message); return null; }
       return data;
     } catch (e) { console.warn("[Supabase] findUser exception:", e.message); return null; }
@@ -1116,7 +1116,7 @@ app.get("/api/orders", async (req, res) => {
   const email = sess.email.toLowerCase();
   if (supabase) {
     try {
-      const { data, error } = await supabase.from("orders").select("*").eq("email", email).order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("orders").select("*").eq("email", email).is("deleted_at", null).order("created_at", { ascending: false });
       if (error) { console.warn("[Supabase] orders list error:", error.message); return res.json([]); }
       return res.json((data || []).map(o => ({
         id: o.id, date: o.date || o.created_at, email: o.email, userName: o.user_name,
@@ -1230,9 +1230,10 @@ app.delete("/api/orders/:id", requireAdmin, async (req, res) => {
   const id = decodeURIComponent(req.params.id);
   if (supabase) {
     try {
-      const { error } = await supabase.from("orders").delete().eq("id", id);
-      if (!error) { logAudit("order:delete", { id }, req.ip); return res.json({ message: "Order deleted" }); }
-      console.warn("[Supabase] order delete error:", error.message);
+      // Soft delete: set deleted_at, status='cancelled'
+      const { error } = await supabase.from("orders").update({ deleted_at: new Date().toISOString(), status: "cancelled" }).eq("id", id);
+      if (!error) { logAudit("order:soft_delete", { id }, req.ip); return res.json({ message: "Order archived" }); }
+      console.warn("[Supabase] order soft delete error:", error.message);
     } catch (e) { console.warn("[Supabase] order delete exception:", e.message); }
   }
   let orders = loadOrders();

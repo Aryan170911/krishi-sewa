@@ -2705,7 +2705,7 @@ function renderApp() {
       pageContent = render404Page();
   }
 
-  app.innerHTML = renderNav() + pageContent + renderFooter() + renderMobileBottomNav();
+  app.innerHTML = renderNav() + pageContent + renderFooter() + renderMobileBottomNav() + renderSupportWidget();
 }
 
 // ============================================
@@ -2754,6 +2754,469 @@ async function init() {
 }
 
 // Start the app when DOM is ready
+// ============================================
+// SUPPORT WIDGET — floating help ball + chat window
+// ============================================
+const supportState = {
+  open: false,
+  chats: [],         // all user's chats (open + closed)
+  chat: null,        // currently selected chat
+  messages: [],
+  loading: false,
+  pollTimer: null,
+  unread: 0,
+  view: "list"       // "list" | "chat"
+};
+
+function renderSupportWidget() {
+  // Hide on admin/auth/coming-soon
+  const hide = ["auth", "coming-soon"].includes(state.currentPage);
+  if (hide) return "";
+  return `
+    <!-- Floating help ball -->
+    <button id="supportBall" onclick="toggleSupportWidget()" class="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-[90] h-14 w-14 rounded-full bg-primary text-on-primary shadow-2xl flex items-center justify-center hover:scale-110 transition-transform ${supportState.open ? "scale-0" : "scale-100"}" aria-label="Get help" title="Get help">
+      <span class="material-symbols-outlined text-2xl">support_agent</span>
+      <span class="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-accent-ochre animate-ping"></span>
+      <span class="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-accent-ochre"></span>
+      ${supportState.unread > 0 ? `<span class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-error text-on-error text-[10px] font-bold flex items-center justify-center">${supportState.unread}</span>` : ""}
+    </button>
+    <!-- Chat window -->
+    <div id="supportPanel" class="fixed inset-x-0 bottom-16 top-0 md:inset-auto md:bottom-6 md:right-6 md:w-96 md:h-[600px] md:max-h-[80vh] z-[95] bg-white md:rounded-2xl shadow-2xl border border-outline-variant flex flex-col ${supportState.open ? "flex" : "hidden"}" style="font-size: 16px;">
+      <div class="flex items-center gap-3 p-4 bg-primary text-on-primary md:rounded-t-2xl shrink-0">
+        <div class="h-10 w-10 rounded-full bg-on-primary/20 flex items-center justify-center shrink-0">
+          <span class="material-symbols-outlined">support_agent</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-sm">Krishi Sewa Support</p>
+          <p class="text-xs opacity-80 flex items-center gap-1">
+            <span class="h-2 w-2 rounded-full bg-green-400"></span>
+            <span>Online • replies in minutes</span>
+          </p>
+        </div>
+        ${supportState.view === "chat" ? `<button onclick="supportBackToList()" class="text-on-primary/80 hover:text-on-primary" aria-label="Back to chats" title="All chats"><span class="material-symbols-outlined">arrow_back</span></button>` : `<button onclick="loadAllSupportChats(); renderSupportPanel();" class="text-on-primary/80 hover:text-on-primary" aria-label="Refresh" title="Refresh"><span class="material-symbols-outlined text-xl">refresh</span></button>`}
+        <button onclick="toggleSupportWidget()" class="text-on-primary/80 hover:text-on-primary" aria-label="Close">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div id="supportBody" class="flex-1 overflow-y-auto p-4 space-y-3 bg-surface-container-lowest">
+        ${renderSupportBody()}
+      </div>
+      <div id="supportInput" class="p-3 border-t border-outline-variant bg-white md:rounded-b-2xl shrink-0">
+        ${renderSupportInput()}
+      </div>
+    </div>
+  `;
+}
+
+function renderSupportBody() {
+  if (supportState.loading) {
+    return `<div class="text-center text-sm text-on-surface-variant py-8"><span class="material-symbols-outlined animate-spin inline">progress_activity</span> Loading…</div>`;
+  }
+  if (supportState.view === "list" || !supportState.chat) {
+    return renderSupportChatList();
+  }
+  // We're in a chat view with a selected chat — show messages
+  if (supportState.messages.length === 0) {
+    return `
+      <div class="text-center py-6">
+        <p class="text-sm text-on-surface-variant mb-2">No messages yet — say hi!</p>
+        <p class="text-xs text-on-surface-variant">${escapeHtml(supportState.chat.subject || "")}</p>
+      </div>`;
+  }
+  return supportState.messages.map(m => {
+    const isUser = m.sender_type === "user";
+    const isSystem = m.sender_type === "system";
+    if (isSystem) {
+      return `<div class="text-center text-xs text-on-surface-variant italic py-2 px-3 bg-surface-container-low rounded-lg">${escapeHtml(m.message)}</div>`;
+    }
+    return `
+      <div class="flex ${isUser ? "justify-end" : "justify-start"}">
+        <div class="max-w-[80%] ${isUser ? "bg-primary text-on-primary" : "bg-white border border-outline-variant"} rounded-2xl px-3 py-2 ${isUser ? "rounded-br-sm" : "rounded-bl-sm"}">
+          <p class="text-sm whitespace-pre-wrap break-words">${escapeHtml(m.message)}</p>
+          <p class="text-[10px] mt-1 ${isUser ? "text-on-primary/70" : "text-on-surface-variant"}">${new Date(m.created_at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}</p>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderSupportChatList() {
+  if (!state.authUser) {
+    return `
+      <div class="text-center py-8">
+        <div class="inline-block h-16 w-16 rounded-full bg-primary-container text-primary flex items-center justify-center mb-2">
+          <span class="material-symbols-outlined text-3xl">support_agent</span>
+        </div>
+        <p class="font-bold text-on-surface">Need help?</p>
+        <p class="text-sm text-on-surface-variant mt-1">Log in to chat with our support team</p>
+        <button onclick="navigateTo('auth')" class="mt-4 px-6 py-2 bg-primary text-on-primary rounded-full font-semibold">Log in</button>
+      </div>`;
+  }
+  const openChats = supportState.chats.filter(c => c.status !== "closed");
+  const closedChats = supportState.chats.filter(c => c.status === "closed");
+  return `
+    <div class="text-center mb-4">
+      <div class="inline-block h-16 w-16 rounded-full bg-primary-container text-primary flex items-center justify-center mb-2">
+        <span class="material-symbols-outlined text-3xl">waving_hand</span>
+      </div>
+      <p class="font-bold text-on-surface">Hi ${escapeHtml(state.authUser.name || "there")} 👋</p>
+      <p class="text-sm text-on-surface-variant mt-1">How can we help today?</p>
+    </div>
+    <button onclick="supportShowNewChatMenu()" class="w-full mb-4 p-3 bg-primary text-on-primary rounded-xl font-semibold flex items-center justify-center gap-2 hover:opacity-90">
+      <span class="material-symbols-outlined">add_comment</span>
+      Start a new conversation
+    </button>
+    <div id="newChatMenu" class="hidden mb-4 space-y-2">
+      <button onclick="supportStartWith('order','📦 I have an order issue')" class="w-full text-left p-3 bg-white border border-outline-variant rounded-xl hover:border-primary hover:bg-primary-container/30 transition-colors flex items-start gap-3">
+        <span class="material-symbols-outlined text-primary mt-0.5">package_2</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-sm text-on-surface">I have an order issue</p>
+          <p class="text-xs text-on-surface-variant">Wrong item, not received, refund, etc.</p>
+        </div>
+        <span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+      </button>
+      <button onclick="supportStartWith('account','🔑 Change email or password')" class="w-full text-left p-3 bg-white border border-outline-variant rounded-xl hover:border-primary hover:bg-primary-container/30 transition-colors flex items-start gap-3">
+        <span class="material-symbols-outlined text-primary mt-0.5">manage_accounts</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-sm text-on-surface">Change email or password</p>
+          <p class="text-xs text-on-surface-variant">Our team can help you update details</p>
+        </div>
+        <span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+      </button>
+      <button onclick="supportStartWith('product','🌱 Product question')" class="w-full text-left p-3 bg-white border border-outline-variant rounded-xl hover:border-primary hover:bg-primary-container/30 transition-colors flex items-start gap-3">
+        <span class="material-symbols-outlined text-primary mt-0.5">eco</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-sm text-on-surface">Product question</p>
+          <p class="text-xs text-on-surface-variant">Seeds, fertilizers, tools, usage</p>
+        </div>
+        <span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+      </button>
+      <button onclick="supportStartWith('general','💬 Something else')" class="w-full text-left p-3 bg-white border border-outline-variant rounded-xl hover:border-primary hover:bg-primary-container/30 transition-colors flex items-start gap-3">
+        <span class="material-symbols-outlined text-primary mt-0.5">chat</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-sm text-on-surface">Something else</p>
+          <p class="text-xs text-on-surface-variant">General feedback or other questions</p>
+        </div>
+        <span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+      </button>
+    </div>
+    ${openChats.length > 0 ? `
+      <p class="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2 px-1">Active conversations (${openChats.length})</p>
+      <div class="space-y-2 mb-3">
+        ${openChats.map(c => renderSupportChatItem(c, false)).join("")}
+      </div>
+    ` : ""}
+    ${closedChats.length > 0 ? `
+      <p class="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2 px-1">Closed</p>
+      <div class="space-y-2">
+        ${closedChats.slice(0, 5).map(c => renderSupportChatItem(c, true)).join("")}
+      </div>
+    ` : ""}
+    <p class="text-[10px] text-on-surface-variant text-center mt-4">We typically reply in under 5 minutes during business hours</p>
+  `;
+}
+
+function renderSupportChatItem(c, isClosed) {
+  const last = c.last_message || c.subject || "No messages yet";
+  const time = c.last_message_at ? new Date(c.last_message_at) : new Date(c.created_at);
+  const ago = timeAgo(time);
+  const unread = c.unread_for_user || 0;
+  const catIcons = { order: "package_2", account: "manage_accounts", product: "eco", general: "chat" };
+  const icon = catIcons[c.category] || "chat";
+  return `
+    <button onclick="supportOpenChat(${c.id})" class="w-full text-left p-3 ${isClosed ? "bg-surface-container-low" : "bg-white border border-outline-variant"} rounded-xl hover:border-primary hover:bg-primary-container/30 transition-colors flex items-start gap-3 ${isClosed ? "opacity-70" : ""}">
+      <div class="h-10 w-10 rounded-full ${isClosed ? "bg-surface-container" : "bg-primary-container"} text-primary flex items-center justify-center shrink-0">
+        <span class="material-symbols-outlined">${icon}</span>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <p class="font-semibold text-sm text-on-surface truncate flex-1">${escapeHtml(c.subject || "Chat")}</p>
+          ${unread > 0 ? `<span class="bg-error text-on-error text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1.5 flex items-center justify-center">${unread}</span>` : ""}
+        </div>
+        <p class="text-xs text-on-surface-variant truncate">${escapeHtml(last)}</p>
+        <p class="text-[10px] text-on-surface-variant mt-0.5">${ago} ${isClosed ? "• Closed" : ""}</p>
+      </div>
+    </button>
+  `;
+}
+
+function renderSupportQuickReplies() {
+  return `
+    <div class="text-center mb-4">
+      <div class="inline-block h-16 w-16 rounded-full bg-primary-container text-primary flex items-center justify-center mb-2">
+        <span class="material-symbols-outlined text-3xl">waving_hand</span>
+      </div>
+      <p class="font-bold text-on-surface">Pick a topic</p>
+      <p class="text-sm text-on-surface-variant mt-1">What do you need help with?</p>
+    </div>
+    <div class="space-y-2">
+      <button onclick="supportStartWith('order','📦 I have an order issue')" class="w-full text-left p-3 bg-white border border-outline-variant rounded-xl hover:border-primary hover:bg-primary-container/30 transition-colors flex items-start gap-3">
+        <span class="material-symbols-outlined text-primary mt-0.5">package_2</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-sm text-on-surface">I have an order issue</p>
+          <p class="text-xs text-on-surface-variant">Wrong item, not received, refund, etc.</p>
+        </div>
+        <span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+      </button>
+      <button onclick="supportStartWith('account','🔑 Change email or password')" class="w-full text-left p-3 bg-white border border-outline-variant rounded-xl hover:border-primary hover:bg-primary-container/30 transition-colors flex items-start gap-3">
+        <span class="material-symbols-outlined text-primary mt-0.5">manage_accounts</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-sm text-on-surface">Change email or password</p>
+          <p class="text-xs text-on-surface-variant">Our team can help you update details</p>
+        </div>
+        <span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+      </button>
+      <button onclick="supportStartWith('product','🌱 Product question')" class="w-full text-left p-3 bg-white border border-outline-variant rounded-xl hover:border-primary hover:bg-primary-container/30 transition-colors flex items-start gap-3">
+        <span class="material-symbols-outlined text-primary mt-0.5">eco</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-sm text-on-surface">Product question</p>
+          <p class="text-xs text-on-surface-variant">Seeds, fertilizers, tools, usage</p>
+        </div>
+        <span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+      </button>
+      <button onclick="supportStartWith('general','💬 Something else')" class="w-full text-left p-3 bg-white border border-outline-variant rounded-xl hover:border-primary hover:bg-primary-container/30 transition-colors flex items-start gap-3">
+        <span class="material-symbols-outlined text-primary mt-0.5">chat</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-sm text-on-surface">Something else</p>
+          <p class="text-xs text-on-surface-variant">General feedback or other questions</p>
+        </div>
+        <span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+      </button>
+    </div>
+  `;
+}
+
+function timeAgo(date) {
+  const now = new Date();
+  const diff = (now - date) / 1000;
+  if (diff < 60) return "just now";
+  if (diff < 3600) return Math.floor(diff/60) + "m ago";
+  if (diff < 86400) return Math.floor(diff/3600) + "h ago";
+  if (diff < 604800) return Math.floor(diff/86400) + "d ago";
+  return date.toLocaleDateString();
+}
+
+function renderSupportInput() {
+  if (!supportState.chat) {
+    return `<p class="text-xs text-on-surface-variant text-center py-2">Pick a topic or open an existing chat above to start messaging</p>`;
+  }
+  return `
+    <form onsubmit="sendSupportMessage(event)" class="flex gap-2 items-end">
+      <textarea id="supportMsgInput" rows="1" placeholder="Type your message…" oninput="autoGrowSupportInput(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); sendSupportMessage(event);}" class="flex-1 resize-none max-h-32 border border-outline-variant rounded-2xl px-3 py-2 text-base focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" style="min-height: 40px;"></textarea>
+      <button type="submit" class="h-10 w-10 shrink-0 rounded-full bg-primary text-on-primary flex items-center justify-center hover:opacity-90 disabled:opacity-40" id="supportSendBtn">
+        <span class="material-symbols-outlined">send</span>
+      </button>
+    </form>
+    <p class="text-[10px] text-on-surface-variant mt-1 text-center">Press Enter to send • Shift+Enter for new line</p>
+  `;
+}
+
+function autoGrowSupportInput(el) {
+  el.style.height = "40px";
+  el.style.height = Math.min(el.scrollHeight, 128) + "px";
+}
+
+function escapeHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
+}
+
+function toggleSupportWidget() {
+  supportState.open = !supportState.open;
+  if (supportState.open) {
+    supportState.unread = 0;
+    if (state.authUser) loadOrCreateSupportChat();
+  }
+  renderApp();
+  if (supportState.open) {
+    setTimeout(() => {
+      const el = document.getElementById("supportBody");
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 100);
+    startSupportPolling();
+  } else {
+    stopSupportPolling();
+  }
+}
+
+async function supportStartWith(category, subject) {
+  if (!state.authUser) {
+    toast("Please log in first to chat with support");
+    navigateTo("auth");
+    return;
+  }
+  supportState.loading = true;
+  document.getElementById("supportBody").innerHTML = renderSupportBody();
+  try {
+    const r = await apiPost("/support/chat/start", { category, subject });
+    if (r.error) { toast(r.error); supportState.loading = false; document.getElementById("supportBody").innerHTML = renderSupportBody(); return; }
+    supportState.chat = r.chat;
+    await loadSupportMessages();
+    supportState.loading = false;
+    // Refresh the chat list in background
+    loadAllSupportChats();
+    supportState.view = "chat";
+    renderSupportPanel();
+    startSupportPolling();
+  } catch (e) {
+    toast("Failed to start chat: " + e.message);
+    supportState.loading = false;
+    document.getElementById("supportBody").innerHTML = renderSupportBody();
+  }
+}
+
+async function supportOpenChat(chatId) {
+  const c = supportState.chats.find(x => x.id === chatId);
+  if (!c) return;
+  supportState.chat = c;
+  supportState.view = "chat";
+  supportState.loading = true;
+  renderSupportPanel();
+  await loadSupportMessages();
+  supportState.loading = false;
+  // Mark this chat as read in the list
+  c.unread_for_user = 0;
+  renderSupportPanel();
+  startSupportPolling();
+}
+
+function supportBackToList() {
+  stopSupportPolling();
+  supportState.view = "list";
+  supportState.chat = null;
+  supportState.messages = [];
+  loadAllSupportChats();
+  renderSupportPanel();
+}
+
+function supportShowNewChatMenu() {
+  const m = document.getElementById("newChatMenu");
+  if (m) m.classList.toggle("hidden");
+}
+
+async function loadAllSupportChats() {
+  if (!state.authUser) return;
+  try {
+    const chats = await apiGet("/support/chats/mine");
+    supportState.chats = chats || [];
+    // Recompute total unread
+    supportState.unread = supportState.chats.reduce((sum, c) => sum + (c.unread_for_user || 0), 0);
+    // Re-render the floating ball badge
+    const ball = document.getElementById("supportBall");
+    if (ball) {
+      let badge = ball.querySelector(".unread-badge");
+      if (supportState.unread > 0) {
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.className = "unread-badge absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-error text-on-error text-[10px] font-bold flex items-center justify-center";
+          ball.appendChild(badge);
+        }
+        badge.textContent = supportState.unread;
+      } else if (badge) {
+        badge.remove();
+      }
+    }
+  } catch (e) { console.warn("loadAllSupportChats:", e.message); }
+}
+
+function renderSupportPanel() {
+  const panel = document.getElementById("supportPanel");
+  if (!panel) {
+    renderApp();
+    return;
+  }
+  // Re-render the whole app to keep header buttons (back/refresh) in sync
+  renderApp();
+  setTimeout(() => {
+    const el = document.getElementById("supportBody");
+    if (el) el.scrollTop = el.scrollHeight;
+  }, 50);
+}
+
+async function loadOrCreateSupportChat() {
+  if (!state.authUser) return;
+  supportState.loading = true;
+  document.getElementById("supportBody").innerHTML = renderSupportBody();
+  try {
+    await loadAllSupportChats();
+  } catch (e) { console.warn("loadOrCreateSupportChat:", e.message); }
+  supportState.loading = false;
+  document.getElementById("supportBody").innerHTML = renderSupportBody();
+}
+
+async function loadSupportMessages() {
+  if (!supportState.chat) return;
+  try {
+    const msgs = await apiGet(`/support/chat/${supportState.chat.id}/messages`);
+    supportState.messages = msgs || [];
+  } catch (e) { console.warn("loadSupportMessages:", e.message); }
+}
+
+async function sendSupportMessage(e) {
+  e.preventDefault();
+  const input = document.getElementById("supportMsgInput");
+  const msg = input.value.trim();
+  if (!msg || !supportState.chat) return;
+  // Optimistic add
+  const tempMsg = { id: "temp-" + Date.now(), sender_type: "user", sender_name: state.authUser.name, message: msg, created_at: new Date().toISOString() };
+  supportState.messages.push(tempMsg);
+  input.value = "";
+  input.style.height = "40px";
+  document.getElementById("supportBody").innerHTML = renderSupportBody();
+  document.getElementById("supportBody").scrollTop = 999999;
+  try {
+    const r = await apiPost(`/support/chat/${supportState.chat.id}/message`, { message: msg });
+    if (r.error) { toast(r.error); return; }
+    // Replace temp with real
+    const idx = supportState.messages.findIndex(m => m.id === tempMsg.id);
+    if (idx !== -1) supportState.messages[idx] = r.message;
+    document.getElementById("supportBody").innerHTML = renderSupportBody();
+  } catch (e) { toast("Failed to send: " + e.message); }
+}
+
+function startSupportPolling() {
+  stopSupportPolling();
+  supportState.pollTimer = setInterval(async () => {
+    if (!supportState.open) return;
+    try {
+      // Always refresh the chat list to keep unread badges up to date
+      await loadAllSupportChats();
+      if (supportState.view === "chat" && supportState.chat) {
+        const before = supportState.messages.length;
+        await loadSupportMessages();
+        const after = supportState.messages.length;
+        if (after !== before) {
+          const newMsgs = supportState.messages.slice(before);
+          const newAdmin = newMsgs.filter(m => m.sender_type === "admin").length;
+          if (newAdmin > 0) {
+            toast(`New message from support`);
+          }
+          const body = document.getElementById("supportBody");
+          if (body) {
+            body.innerHTML = renderSupportBody();
+            body.scrollTop = 999999;
+          }
+        }
+      } else if (supportState.view === "list") {
+        // Refresh the list display (for unread badges)
+        const body = document.getElementById("supportBody");
+        if (body && !body.querySelector(".text-center.text-sm.text-on-surface-variant.py-8")) {
+          body.innerHTML = renderSupportBody();
+        }
+      }
+    } catch {}
+  }, 3000);
+}
+function stopSupportPolling() {
+  if (supportState.pollTimer) { clearInterval(supportState.pollTimer); supportState.pollTimer = null; }
+}
+
+// Stop polling when widget is closed and we navigate
+const _origNavigateTo = navigateTo;
+navigateTo = function(page, params) {
+  stopSupportPolling();
+  return _origNavigateTo(page, params);
+};
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {

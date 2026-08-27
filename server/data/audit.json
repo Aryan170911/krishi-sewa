@@ -34,5 +34,39 @@
     },
     "ip": "::1",
     "user": "admin"
+  },
+  {
+    "timestamp": "2026-08-27T02:56:50.071Z",
+    "action": "order:create",
+    "details": {
+      "id": "#KS-9IJWEK",
+      "email": "aryankumar.170911@gmail.com",
+      "total": 1310,
+      "source": "supabase"
+    },
+    "ip": "::1",
+    "user": "admin"
+  },
+  {
+    "timestamp": "2026-08-27T02:59:22.665Z",
+    "action": "product:create",
+    "details": {
+      "id": 7,
+      "name": "Dada ji ki jaributi"
+    },
+    "ip": "::1",
+    "user": "admin"
+  },
+  {
+    "timestamp": "2026-08-27T03:00:10.355Z",
+    "action": "order:create",
+    "details": {
+      "id": "#KS-FBEIJZ",
+      "email": "aryankumar.170911@gmail.com",
+      "total": 129,
+      "source": "supabase"
+    },
+    "ip": "::1",
+    "user": "admin"
   }
 ]

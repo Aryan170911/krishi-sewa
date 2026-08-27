@@ -254,6 +254,354 @@ app.get("/api/config", (req, res) => {
 });
 
 // ============================================
+// SUPPORT SYSTEM — chats, messages, admin actions
+// Uses Supabase when configured, else in-memory (no persistence)
+// ============================================
+const ADMIN_SESSION_COOKIE = "krishi_admin";
+const ADMIN_SESSION_TTL = 8 * 60 * 60 * 1000; // 8 hours
+const ADMIN_SESSIONS = new Map(); // token -> { email, name, role, createdAt }
+const SUPPORT_CHATS = new Map();  // id -> chat (in-memory fallback)
+const SUPPORT_MSGS = new Map();   // chatId -> [messages]
+let _chatIdSeq = 1;
+let _msgIdSeq = 1;
+
+function newAdminToken() { return crypto.randomBytes(24).toString("hex"); }
+function getAdminSession(req) {
+  const token = (req.headers.cookie || "").split(";").map(s => s.trim()).find(s => s.startsWith(ADMIN_SESSION_COOKIE + "="))?.split("=")[1];
+  if (!token) return null;
+  const s = ADMIN_SESSIONS.get(token);
+  if (!s) return null;
+  if (Date.now() - s.createdAt > ADMIN_SESSION_TTL) { ADMIN_SESSIONS.delete(token); return null; }
+  return { token, ...s };
+}
+function requireAdminAuth(req, res, next) {
+  const s = getAdminSession(req);
+  if (!s) return res.status(401).json({ error: "Admin login required" });
+  req.adminSession = s;
+  next();
+}
+
+async function logAdminActivity(adminEmail, actionType, targetUserEmail, details) {
+  const entry = { admin_email: adminEmail, action_type: actionType, target_user_email: targetUserEmail, details: details || {}, ip: arguments[4] || "", created_at: new Date().toISOString() };
+  if (supabase) {
+    try { await supabase.from("support_activity_log").insert(entry); } catch (e) { console.warn("[Supabase] logAdminActivity:", e.message); }
+  }
+  // Also append to local audit.json for the legacy admin panel
+  try { logAudit("admin:" + actionType, { admin: adminEmail, target: targetUserEmail, ...details }, ""); } catch {}
+}
+
+// ---- Admin login (uses admin_profiles table) ----
+app.post("/api/admin/support/login", async (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const password = String(req.body?.password || "");
+    if (!email || !password) return res.status(400).json({ error: "Email and password required" });
+    let admin = null;
+    if (supabase) {
+      try {
+        const r = await supabase.from("admin_profiles").select("*").eq("email", email).eq("active", true).maybeSingle();
+        admin = r.data;
+      } catch (e) { console.warn("[Supabase] admin login:", e.message); }
+    }
+    if (!admin) {
+      // Fallback: check legacy ADMIN_USER/ADMIN_PASS env
+      if (email === ADMIN_USER && password === ADMIN_PASS) {
+        admin = { email: ADMIN_USER, name: "Admin", role: "superadmin" };
+      } else {
+        return res.status(401).json({ error: "Wrong email or password" });
+      }
+    }
+    if (!verifyPassword(password, admin.password_hash || "")) {
+      // If no password_hash (legacy admin), we already passed above
+      return res.status(401).json({ error: "Wrong email or password" });
+    }
+    const token = newAdminToken();
+    ADMIN_SESSIONS.set(token, { email: admin.email, name: admin.name, role: admin.role || "admin", createdAt: Date.now() });
+    res.cookie(ADMIN_SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", secure: IS_PROD, maxAge: ADMIN_SESSION_TTL });
+    if (supabase) supabase.from("admin_profiles").update({ last_login_at: new Date().toISOString() }).eq("email", email).then(() => {}).catch(() => {});
+    res.json({ ok: true, admin: { email: admin.email, name: admin.name, role: admin.role || "admin" } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/api/admin/support/logout", (req, res) => {
+  const s = getAdminSession(req);
+  if (s) ADMIN_SESSIONS.delete(s.token);
+  res.clearCookie(ADMIN_SESSION_COOKIE);
+  res.json({ ok: true });
+});
+app.get("/api/admin/support/me", (req, res) => {
+  const s = getAdminSession(req);
+  if (!s) return res.status(401).json({ admin: null });
+  res.json({ admin: { email: s.email, name: s.name, role: s.role } });
+});
+
+// ---- User: start a chat ----
+app.post("/api/support/chat/start", async (req, res) => {
+  try {
+    const email = String(req.body?.email || (state_authEmailFromSession(req)) || "").trim().toLowerCase();
+    const name = String(req.body?.name || "").trim();
+    const subject = String(req.body?.subject || "How can we help?").slice(0, 200);
+    const category = String(req.body?.category || "general");
+    if (!email) return res.status(400).json({ error: "Email required" });
+    const sess = getSession(req);
+    const userEmail = sess?.email || email;
+    const userName = sess?.name || name || userEmail.split("@")[0];
+    const chat = {
+      user_email: userEmail, user_name: userName, subject, category,
+      status: "open", assigned_admin_email: null,
+      last_message_at: new Date().toISOString(),
+      last_message_preview: subject,
+      unread_for_admin: 1, unread_for_user: 0,
+      created_at: new Date().toISOString(), closed_at: null
+    };
+    if (supabase) {
+      try {
+        const r = await supabase.from("support_chats").insert(chat).select().single();
+        if (r.data) {
+          // First message = subject
+          await supabase.from("support_messages").insert({
+            chat_id: r.data.id, sender_type: "user", sender_email: userEmail, sender_name: userName, message: subject, created_at: new Date().toISOString()
+          });
+          return res.json({ ok: true, chat: r.data });
+        }
+      } catch (e) { console.warn("[Supabase] chat start:", e.message); return res.status(500).json({ error: e.message }); }
+    }
+    // In-memory fallback
+    const id = _chatIdSeq++;
+    const saved = { id, ...chat };
+    SUPPORT_CHATS.set(id, saved);
+    SUPPORT_MSGS.set(id, [{ id: _msgIdSeq++, chat_id: id, sender_type: "user", sender_email: userEmail, sender_name: userName, message: subject, created_at: chat.created_at }]);
+    res.json({ ok: true, chat: saved });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+function state_authEmailFromSession(req) { return getSession(req)?.email; }
+
+// ---- User: send a message to a chat ----
+app.post("/api/support/chat/:id/message", async (req, res) => {
+  try {
+    const chatId = parseInt(req.params.id);
+    const message = String(req.body?.message || "").trim();
+    const metadata = req.body?.metadata || null;
+    if (!message) return res.status(400).json({ error: "Message required" });
+    const sess = getSession(req);
+    const userEmail = sess?.email;
+    if (!userEmail) return res.status(401).json({ error: "Login required" });
+    // Verify ownership if Supabase
+    if (supabase) {
+      const c = await supabase.from("support_chats").select("user_email,status").eq("id", chatId).maybeSingle();
+      if (!c.data) return res.status(404).json({ error: "Chat not found" });
+      if (c.data.user_email !== userEmail) return res.status(403).json({ error: "Not your chat" });
+      const msg = { chat_id: chatId, sender_type: "user", sender_email: userEmail, sender_name: sess.name || userEmail, message, metadata, created_at: new Date().toISOString() };
+      const r = await supabase.from("support_messages").insert(msg).select().single();
+      await supabase.from("support_chats").update({
+        last_message_at: msg.created_at, last_message_preview: message.slice(0, 100),
+        unread_for_admin: (c.data.status === "open" || !c.data.assigned_admin_email) ? 1 : 0  // simple: always 1 if unassigned
+      }).eq("id", chatId);
+      return res.json({ ok: true, message: r.data });
+    }
+    // In-memory
+    const chat = SUPPORT_CHATS.get(chatId);
+    if (!chat) return res.status(404).json({ error: "Chat not found" });
+    if (chat.user_email !== userEmail) return res.status(403).json({ error: "Not your chat" });
+    const msg = { id: _msgIdSeq++, chat_id: chatId, sender_type: "user", sender_email: userEmail, sender_name: sess.name, message, metadata, created_at: new Date().toISOString() };
+    const list = SUPPORT_MSGS.get(chatId) || [];
+    list.push(msg);
+    SUPPORT_MSGS.set(chatId, list);
+    chat.last_message_at = msg.created_at; chat.last_message_preview = message.slice(0, 100);
+    res.json({ ok: true, message: msg });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ---- User: list my chats ----
+app.get("/api/support/chats/mine", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  if (supabase) {
+    const r = await supabase.from("support_chats").select("*").eq("user_email", sess.email).order("last_message_at", { ascending: false });
+    return res.json(r.data || []);
+  }
+  res.json([...SUPPORT_CHATS.values()].filter(c => c.user_email === sess.email).sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at)));
+});
+
+// ---- User: get messages of one chat ----
+app.get("/api/support/chat/:id/messages", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.status(401).json({ error: "Login required" });
+  const chatId = parseInt(req.params.id);
+  if (supabase) {
+    const c = await supabase.from("support_chats").select("user_email").eq("id", chatId).maybeSingle();
+    if (!c.data || c.data.user_email !== sess.email) return res.status(403).json({ error: "Not your chat" });
+    const r = await supabase.from("support_messages").select("*").eq("chat_id", chatId).order("created_at", { ascending: true });
+    // Mark user messages as read
+    await supabase.from("support_chats").update({ unread_for_user: 0 }).eq("id", chatId);
+    return res.json(r.data || []);
+  }
+  const chat = SUPPORT_CHATS.get(chatId);
+  if (!chat || chat.user_email !== sess.email) return res.status(403).json({ error: "Not your chat" });
+  res.json(SUPPORT_MSGS.get(chatId) || []);
+});
+
+// ---- Admin: list all open chats ----
+app.get("/api/admin/support/chats", requireAdminAuth, async (req, res) => {
+  if (supabase) {
+    const r = await supabase.from("support_chats").select("*").order("last_message_at", { ascending: false }).limit(200);
+    return res.json(r.data || []);
+  }
+  res.json([...SUPPORT_CHATS.values()].sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at)));
+});
+
+// ---- Admin: get messages of any chat ----
+app.get("/api/admin/support/chat/:id/messages", requireAdminAuth, async (req, res) => {
+  const chatId = parseInt(req.params.id);
+  if (supabase) {
+    const r = await supabase.from("support_messages").select("*").eq("chat_id", chatId).order("created_at", { ascending: true });
+    await supabase.from("support_chats").update({ unread_for_admin: 0 }).eq("id", chatId);
+    return res.json(r.data || []);
+  }
+  res.json(SUPPORT_MSGS.get(chatId) || []);
+});
+
+// ---- Admin: send a message ----
+app.post("/api/admin/support/chat/:id/message", requireAdminAuth, async (req, res) => {
+  try {
+    const chatId = parseInt(req.params.id);
+    const message = String(req.body?.message || "").trim();
+    if (!message) return res.status(400).json({ error: "Message required" });
+    const admin = req.adminSession;
+    const msg = { chat_id: chatId, sender_type: "admin", sender_email: admin.email, sender_name: admin.name, message, metadata: req.body?.metadata || null, created_at: new Date().toISOString() };
+    if (supabase) {
+      const r = await supabase.from("support_messages").insert(msg).select().single();
+      await supabase.from("support_chats").update({
+        last_message_at: msg.created_at, last_message_preview: message.slice(0, 100),
+        unread_for_user: 1, assigned_admin_email: admin.email, status: "assigned"
+      }).eq("id", chatId);
+      return res.json({ ok: true, message: r.data });
+    }
+    const chat = SUPPORT_CHATS.get(chatId);
+    if (!chat) return res.status(404).json({ error: "Chat not found" });
+    const list = SUPPORT_MSGS.get(chatId) || [];
+    list.push({ id: _msgIdSeq++, ...msg });
+    chat.last_message_at = msg.created_at; chat.last_message_preview = message.slice(0, 100); chat.unread_for_user = 1; chat.assigned_admin_email = admin.email; chat.status = "assigned";
+    res.json({ ok: true, message: { id: _msgIdSeq - 1, ...msg } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ---- Admin: close a chat ----
+app.post("/api/admin/support/chat/:id/close", requireAdminAuth, async (req, res) => {
+  const chatId = parseInt(req.params.id);
+  const admin = req.adminSession;
+  if (supabase) {
+    await supabase.from("support_chats").update({ status: "closed", closed_at: new Date().toISOString() }).eq("id", chatId);
+  } else {
+    const chat = SUPPORT_CHATS.get(chatId);
+    if (chat) { chat.status = "closed"; chat.closed_at = new Date().toISOString(); }
+  }
+  await logAdminActivity(admin.email, "chat_close", null, { chatId });
+  res.json({ ok: true });
+});
+
+// ---- Admin: view user context ----
+app.get("/api/admin/support/user/:email", requireAdminAuth, async (req, res) => {
+  const email = req.params.email.toLowerCase();
+  let user = null, orders = [];
+  if (supabase) {
+    try { const r = await supabase.from("users").select("email,name,created_at").eq("email", email).maybeSingle(); user = r.data; } catch {}
+    try { const r = await supabase.from("orders").select("id,date,total,status,items").eq("email", email).order("created_at", { ascending: false }).limit(20); orders = r.data || []; } catch {}
+  }
+  res.json({ user, orders, orderCount: orders.length, totalSpent: orders.reduce((s, o) => s + Number(o.total || 0), 0) });
+});
+
+// ---- Admin actions on user data ----
+app.post("/api/admin/support/user/:email/change-email", requireAdminAuth, async (req, res) => {
+  const oldEmail = req.params.email.toLowerCase();
+  const newEmail = String(req.body?.newEmail || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) return res.status(400).json({ error: "Invalid new email" });
+  if (supabase) {
+    // Check new email not taken
+    const exists = await supabase.from("users").select("email").eq("email", newEmail).maybeSingle();
+    if (exists.data) return res.status(409).json({ error: "New email already in use" });
+    // Update users table
+    const u = await supabase.from("users").update({ email: newEmail }).eq("email", oldEmail).select().single();
+    if (u.error) return res.status(500).json({ error: u.error.message });
+    // Update orders table to match
+    await supabase.from("orders").update({ email: newEmail }).eq("email", oldEmail);
+    // Add system message in active chats
+    const chats = await supabase.from("support_chats").select("id").eq("user_email", oldEmail);
+    for (const c of (chats.data || [])) {
+      await supabase.from("support_messages").insert({
+        chat_id: c.id, sender_type: "system", sender_email: "system", sender_name: "System",
+        message: `Email changed from ${oldEmail} to ${newEmail} by admin`, created_at: new Date().toISOString()
+      });
+    }
+  }
+  await logAdminActivity(req.adminSession.email, "email_change", oldEmail, { newEmail });
+  res.json({ ok: true, oldEmail, newEmail });
+});
+
+app.post("/api/admin/support/user/:email/reset-password", requireAdminAuth, async (req, res) => {
+  const email = req.params.email.toLowerCase();
+  const newPassword = String(req.body?.newPassword || "");
+  const pwErr = validatePassword(newPassword);
+  if (pwErr) return res.status(400).json({ error: pwErr });
+  if (supabase) {
+    const u = await supabase.from("users").update({ password_hash: hashPassword(newPassword) }).eq("email", email).select().single();
+    if (u.error) return res.status(500).json({ error: u.error.message });
+    const chats = await supabase.from("support_chats").select("id").eq("user_email", email);
+    for (const c of (chats.data || [])) {
+      await supabase.from("support_messages").insert({
+        chat_id: c.id, sender_type: "system", sender_email: "system", sender_name: "System",
+        message: "Password was reset by admin. New credentials have been emailed to you.", created_at: new Date().toISOString()
+      });
+    }
+  }
+  await logAdminActivity(req.adminSession.email, "password_reset", email, {});
+  res.json({ ok: true });
+});
+
+// ---- Admin: activity log ----
+app.get("/api/admin/support/activity", requireAdminAuth, async (req, res) => {
+  if (supabase) {
+    const r = await supabase.from("support_activity_log").select("*").order("created_at", { ascending: false }).limit(100);
+    return res.json(r.data || []);
+  }
+  res.json([]);
+});
+
+// ---- Admin: list all admin profiles (superadmin only) ----
+app.get("/api/admin/support/staff", requireAdminAuth, async (req, res) => {
+  if (req.adminSession.role !== "superadmin") return res.status(403).json({ error: "Superadmin only" });
+  if (supabase) {
+    const r = await supabase.from("admin_profiles").select("id,email,name,role,active,created_at,last_login_at").order("created_at", { ascending: false });
+    return res.json(r.data || []);
+  }
+  res.json([{ id: 1, email: ADMIN_USER, name: "Admin", role: "superadmin", active: true }]);
+});
+app.post("/api/admin/support/staff", requireAdminAuth, async (req, res) => {
+  if (req.adminSession.role !== "superadmin") return res.status(403).json({ error: "Superadmin only" });
+  const { email, name, password, role } = req.body || {};
+  if (!email || !name || !password) return res.status(400).json({ error: "email, name, password required" });
+  if (supabase) {
+    const r = await supabase.from("admin_profiles").insert({ email: email.toLowerCase(), name, role: role || "admin", password_hash: hashPassword(password), active: true }).select().single();
+    if (r.error) return res.status(500).json({ error: r.error.message });
+    await logAdminActivity(req.adminSession.email, "staff_add", null, { newEmail: email });
+    return res.json({ ok: true, admin: r.data });
+  }
+  res.status(501).json({ error: "Supabase not configured" });
+});
+
+// ---- Bootstrap: ensure default superadmin exists ----
+async function bootstrapAdmin() {
+  if (!supabase) return;
+  try {
+    const r = await supabase.from("admin_profiles").select("id").eq("email", ADMIN_USER).maybeSingle();
+    if (!r.data) {
+      await supabase.from("admin_profiles").insert({ email: ADMIN_USER, name: "Admin", role: "superadmin", password_hash: hashPassword(ADMIN_PASS), active: true });
+      console.log(`[Admin] Bootstrapped default superadmin (${ADMIN_USER}) in Supabase`);
+    }
+  } catch (e) { console.warn("[Admin] bootstrap:", e.message); }
+}
+bootstrapAdmin();
+
+// ============================================
 // EMAIL OTP — Resend (no Supabase, no SMTP, works on Render)
 // ============================================
 const otpStore = new Map(); // email -> { code, expiresAt, attempts }

@@ -3,11 +3,22 @@ services:
     name: krishi-sewa
     env: node
     plan: free
+    rootDir: .
     buildCommand: npm install --prefix server
     startCommand: node server/server.js
     healthCheckPath: /api/health
     envVars:
-      - key: PORT
-        value: 10000
       - key: NODE_ENV
         value: production
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: Krishi Sewa <onboarding@resend.dev>
+      - key: ADMIN_BOOTSTRAP_USERNAME
+        value: admin
+      - key: ADMIN_BOOTSTRAP_PASSWORD
+        sync: false

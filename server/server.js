@@ -313,9 +313,11 @@ async function logAdminActivity(adminEmail, actionType, targetUserEmail, details
 // ---- Admin login (uses admin_profiles table) ----
 app.post("/api/admin/support/login", async (req, res) => {
   try {
-    const email = String(req.body?.email || "").trim().toLowerCase();
+    const emailRaw = String(req.body?.email || "").trim().toLowerCase();
     const password = String(req.body?.password || "");
-    if (!email || !password) return res.status(400).json({ error: "Email and password required" });
+    if (!emailRaw || !password) return res.status(400).json({ error: "Email and password required" });
+    // Normalize: if no @, treat as username and add domain
+    const email = emailRaw.includes("@") ? emailRaw : `${emailRaw}@krishi-sewa.local`;
     let admin = null;
     if (supabase) {
       try {
@@ -324,15 +326,15 @@ app.post("/api/admin/support/login", async (req, res) => {
       } catch (e) { console.warn("[Supabase] admin login:", e.message); }
     }
     if (!admin) {
-      // Fallback: check legacy ADMIN_USER/ADMIN_PASS env
-      if (email === ADMIN_USER && password === ADMIN_PASS) {
-        admin = { email: ADMIN_USER, name: "Admin", role: "superadmin" };
+      // Fallback: check legacy ADMIN_USER/ADMIN_PASS env (also normalized)
+      const legacyEmail = ADMIN_USER.includes("@") ? ADMIN_USER.toLowerCase() : `${ADMIN_USER}@krishi-sewa.local`;
+      if (email === legacyEmail && password === ADMIN_PASS) {
+        admin = { email, name: "Admin", role: "superadmin" };
       } else {
         return res.status(401).json({ error: "Wrong email or password" });
       }
     }
-    if (!verifyPassword(password, admin.password_hash || "")) {
-      // If no password_hash (legacy admin), we already passed above
+    if (admin.password_hash && !verifyPassword(password, admin.password_hash)) {
       return res.status(401).json({ error: "Wrong email or password" });
     }
     const token = newAdminToken();
@@ -610,10 +612,13 @@ app.post("/api/admin/support/staff", requireAdminAuth, async (req, res) => {
 async function bootstrapAdmin() {
   if (!supabase) return;
   try {
-    const r = await supabase.from("admin_profiles").select("id").eq("email", ADMIN_USER).maybeSingle();
+    // Normalize admin email to a valid format (must contain @)
+    const adminEmailRaw = ADMIN_USER;
+    const adminEmail = adminEmailRaw.includes("@") ? adminEmailRaw.toLowerCase() : `${adminEmailRaw}@krishi-sewa.local`;
+    const r = await supabase.from("admin_profiles").select("id").eq("email", adminEmail).maybeSingle();
     if (!r.data) {
-      await supabase.from("admin_profiles").insert({ email: ADMIN_USER, name: "Admin", role: "superadmin", password_hash: hashPassword(ADMIN_PASS), active: true });
-      console.log(`[Admin] Bootstrapped default superadmin (${ADMIN_USER}) in Supabase`);
+      await supabase.from("admin_profiles").insert({ email: adminEmail, name: "Admin", role: "superadmin", password_hash: hashPassword(ADMIN_PASS), active: true });
+      console.log(`[Admin] Bootstrapped default superadmin (${adminEmail}) in Supabase`);
     }
   } catch (e) { console.warn("[Admin] bootstrap:", e.message); }
 }

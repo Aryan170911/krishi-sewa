@@ -101,7 +101,7 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'orders_id_format') THEN
     ALTER TABLE orders ADD CONSTRAINT orders_id_format
-      CHECK (id ~ '^KR[0-9]{8,}$');
+      CHECK (id ~ '^#?KS-[A-Z0-9]+$');
   END IF;
 END$$;
 

@@ -624,6 +624,31 @@ async function bootstrapAdmin() {
 }
 bootstrapAdmin();
 
+// Sync products to Supabase on startup (if Supabase has no products, push local ones)
+async function syncProductsToSupabase() {
+  if (!supabase) return;
+  try {
+    const { data, error } = await supabase.from("products").select("id", { count: "exact", head: true });
+    if (error) { console.warn("[Supabase] products count check:", error.message); return; }
+    if (data && data.length === 0) {
+      console.log("[Supabase] No products in DB, seeding from local...");
+      for (const p of products) {
+        await supabase.from("products").insert({
+          name: p.name, description: p.description, short_description: p.shortDescription,
+          price: p.price, original_price: p.originalPrice, image: p.image,
+          category: p.category, tags: p.tags || [], in_stock: p.inStock !== false,
+          rating: p.rating || 4.5, review_count: p.reviewCount || 0,
+          specifications: p.specifications || {}, reviews: p.reviews || []
+        });
+      }
+      console.log(`[Supabase] Seeded ${products.length} products`);
+    } else {
+      console.log(`[Supabase] Products already in DB (${data?.length || 0}), skipping seed`);
+    }
+  } catch (e) { console.warn("[Supabase] syncProductsToSupabase:", e.message); }
+}
+syncProductsToSupabase();
+
 // ============================================
 // EMAIL OTP — Resend (no Supabase, no SMTP, works on Render)
 // ============================================
@@ -958,7 +983,7 @@ app.get("/api/products/:id", (req, res) => {
 });
 
 // Admin product CRUD
-app.post("/api/products", requireAdmin, (req, res) => {
+app.post("/api/products", requireAdmin, async (req, res) => {
   const { name, description, shortDescription, price, originalPrice, image, category, tags, inStock, rating, reviewCount, specifications } = req.body;
   if (!name || price == null) return res.status(400).json({ error: "name and price required" });
   const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
@@ -980,40 +1005,75 @@ app.post("/api/products", requireAdmin, (req, res) => {
   };
   products.push(newProduct);
   saveProducts(products);
+  // Also persist to Supabase
+  if (supabase) {
+    try {
+      await supabase.from("products").insert({
+        name: newProduct.name, description: newProduct.description,
+        short_description: newProduct.shortDescription, price: newProduct.price,
+        original_price: newProduct.originalPrice, image: newProduct.image,
+        category: newProduct.category, tags: newProduct.tags,
+        in_stock: newProduct.inStock, rating: newProduct.rating,
+        review_count: newProduct.reviewCount,
+        specifications: newProduct.specifications, reviews: newProduct.reviews
+      });
+    } catch (e) { console.warn("[Supabase] product insert:", e.message); }
+  }
   logAudit("product:create", { id: newId, name }, req.ip);
   res.status(201).json(newProduct);
 });
 
-app.put("/api/products/:id", requireAdmin, (req, res) => {
+app.put("/api/products/:id", requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
   const idx = products.findIndex(p => p.id === id);
   if (idx === -1) return res.status(404).json({ error: "Product not found" });
   const updated = { ...products[idx], ...req.body, id };
-  // Ensure types
   if (req.body.price != null) updated.price = parseFloat(req.body.price);
   if (req.body.originalPrice != null) updated.originalPrice = parseFloat(req.body.originalPrice);
   products[idx] = updated;
   saveProducts(products);
+  if (supabase) {
+    try {
+      // Update by matching name (since Supabase uses auto id) or use a name-based lookup
+      await supabase.from("products").update({
+        name: updated.name, description: updated.description,
+        short_description: updated.shortDescription, price: updated.price,
+        original_price: updated.originalPrice, image: updated.image,
+        category: updated.category, tags: updated.tags,
+        in_stock: updated.inStock, rating: updated.rating,
+        review_count: updated.reviewCount,
+        specifications: updated.specifications
+      }).eq("name", products[idx].name);
+    } catch (e) { console.warn("[Supabase] product update:", e.message); }
+  }
   logAudit("product:update", { id, name: updated.name }, req.ip);
   res.json(updated);
 });
 
-app.delete("/api/products/:id", requireAdmin, (req, res) => {
+app.delete("/api/products/:id", requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
   const idx = products.findIndex(p => p.id === id);
   if (idx === -1) return res.status(404).json({ error: "Product not found" });
   const removed = products.splice(idx, 1)[0];
   saveProducts(products);
+  if (supabase) {
+    try { await supabase.from("products").delete().eq("name", removed.name); }
+    catch (e) { console.warn("[Supabase] product delete:", e.message); }
+  }
   logAudit("product:delete", { id, name: removed.name }, req.ip);
   res.json({ message: "Deleted", product: removed });
 });
 
-app.patch("/api/products/:id/stock", requireAdmin, (req, res) => {
+app.patch("/api/products/:id/stock", requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
   const product = products.find(p => p.id === id);
   if (!product) return res.status(404).json({ error: "Product not found" });
   product.inStock = !!req.body.inStock;
   saveProducts(products);
+  if (supabase) {
+    try { await supabase.from("products").update({ in_stock: product.inStock }).eq("name", product.name); }
+    catch (e) { console.warn("[Supabase] product stock:", e.message); }
+  }
   logAudit("product:stock", { id, inStock: product.inStock }, req.ip);
   res.json(product);
 });

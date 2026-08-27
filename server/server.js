@@ -190,8 +190,8 @@ function calculateCartTotal(cartItems) {
 
 // ============ API Routes ============
 
-app.get("/api/health", (req, res) => {
-  res.json({
+app.get("/api/health", async (req, res) => {
+  const health = {
     status: "ok",
     message: "Krishi Sewa API running",
     version: "1.0.0",
@@ -199,8 +199,18 @@ app.get("/api/health", (req, res) => {
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
     products: products.length,
-    orders: loadOrders().length
-  });
+    orders: loadOrders().length,
+    db: "unknown"
+  };
+  if (supabase) {
+    try {
+      const { error } = await supabase.from("users").select("email").limit(1);
+      health.db = error ? `error: ${error.message}` : "connected";
+    } catch (e) { health.db = `error: ${e.message}`; }
+  } else {
+    health.db = "json-fallback";
+  }
+  res.json(health);
 });
 app.get("/api", (req, res) => {
   res.json({
@@ -775,7 +785,33 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     if (!password) return res.status(400).json({ error: "Password required" });
     const user = await findUser(email);
     if (!user) return res.status(404).json({ error: "No account with this email — sign up first" });
-    if (!verifyPassword(password, user.password_hash)) return res.status(401).json({ error: "Wrong password — try again or use 'Forgot password?'" });
+    // Check account lockout (Supabase only)
+    if (supabase && user.locked_until && new Date(user.locked_until) > new Date()) {
+      const mins = Math.ceil((new Date(user.locked_until) - new Date()) / 60000);
+      return res.status(423).json({ error: `Account temporarily locked. Try again in ${mins} minute(s).` });
+    }
+    if (!verifyPassword(password, user.password_hash)) {
+      // Track failed attempts
+      if (supabase) {
+        const fails = (user.failed_login_count || 0) + 1;
+        const update = { failed_login_count: fails };
+        if (fails >= 5) {
+          update.locked_until = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+          update.failed_login_count = 0;
+        }
+        await supabase.from("users").update(update).eq("email", email);
+      }
+      return res.status(401).json({ error: "Wrong password — try again or use 'Forgot password?'" });
+    }
+    // Successful login — reset counters
+    if (supabase) {
+      await supabase.from("users").update({
+        failed_login_count: 0,
+        locked_until: null,
+        last_login_at: new Date().toISOString(),
+        last_login_ip: req.ip
+      }).eq("email", email);
+    }
     issueSession(res, email, user.name);
     res.json({ ok: true, user: { email: user.email, name: user.name } });
   } catch (e) { res.status(500).json({ error: e.message }); }

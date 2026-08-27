@@ -109,6 +109,10 @@ tailwind.config = {
       <button data-tab="orders" class="admin-tab flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-semibold text-on-surface-variant hover:bg-surface-variant">
         <span class="material-symbols-outlined text-[20px]">receipt_long</span> Orders
       </button>
+      <button data-tab="support" class="admin-tab flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-semibold text-on-surface-variant hover:bg-surface-variant">
+        <span class="material-symbols-outlined text-[20px]">support_agent</span> Support
+        <span id="supportUnreadBadge" class="ml-auto bg-error text-on-error text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1.5 flex items-center justify-center hidden"></span>
+      </button>
       <div class="mt-auto pt-4 border-t border-outline-variant text-xs text-on-surface-variant">
         <p>API: <span id="apiStatus" class="text-primary font-semibold">● Connected</span></p>
         <p class="mt-1">Backend: <span class="font-mono">/api</span></p>
@@ -120,6 +124,7 @@ tailwind.config = {
       <button data-tab="dashboard" class="admin-tab-mobile active flex-1 flex flex-col items-center py-2 text-primary"><span class="material-symbols-outlined">dashboard</span><span class="text-[10px] font-semibold">Dashboard</span></button>
       <button data-tab="products" class="admin-tab-mobile flex-1 flex flex-col items-center py-2 text-on-surface-variant"><span class="material-symbols-outlined">inventory_2</span><span class="text-[10px] font-semibold">Products</span></button>
       <button data-tab="orders" class="admin-tab-mobile flex-1 flex flex-col items-center py-2 text-on-surface-variant"><span class="material-symbols-outlined">receipt_long</span><span class="text-[10px] font-semibold">Orders</span></button>
+      <button data-tab="support" class="admin-tab-mobile flex-1 flex flex-col items-center py-2 text-on-surface-variant"><span class="material-symbols-outlined">support_agent</span><span class="text-[10px] font-semibold">Support</span></button>
     </div>
 
     <!-- Content -->
@@ -182,6 +187,73 @@ tailwind.config = {
         </div>
         <div id="ordersTableWrap" class="space-y-3">
           <!-- orders injected -->
+        </div>
+      </section>
+
+      <!-- Support -->
+      <section id="tab-support" class="admin-section hidden">
+        <div id="supportLoginPanel" class="max-w-md mx-auto mt-12">
+          <div class="bg-white border border-outline-variant rounded-2xl p-8 shadow-sm">
+            <div class="text-center mb-6">
+              <div class="w-14 h-14 bg-primary rounded-xl flex items-center justify-center mx-auto mb-4">
+                <span class="material-symbols-outlined text-on-primary text-3xl">support_agent</span>
+              </div>
+              <h2 class="font-headline-lg text-2xl font-bold text-primary">Support Login</h2>
+              <p class="text-on-surface-variant mt-1 text-sm">Sign in as support staff</p>
+            </div>
+            <form id="supportLoginForm" class="space-y-4" onsubmit="supportLogin(event)">
+              <div>
+                <label class="block text-sm font-semibold text-on-surface mb-1">Email or username</label>
+                <input id="supportLoginUser" class="w-full bg-surface border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:ring-1 focus:ring-primary outline-none" placeholder="admin" value="admin" required>
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-on-surface mb-1">Password</label>
+                <input id="supportLoginPass" type="password" class="w-full bg-surface border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:ring-1 focus:ring-primary outline-none" placeholder="admin123" value="admin123" required>
+              </div>
+              <p id="supportLoginError" class="text-error text-sm hidden"></p>
+              <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg font-semibold hover:bg-primary-container transition-colors flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined">login</span> Sign in
+              </button>
+              <p class="text-center text-xs text-on-surface-variant">Uses the same admin credentials</p>
+            </form>
+          </div>
+        </div>
+        <div id="supportPanel" class="hidden">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="text-2xl font-bold text-primary">Support Chats</h2>
+              <p class="text-on-surface-variant text-sm">Active customer conversations</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <select id="supportStatusFilter" onchange="loadSupportChats()" class="border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white">
+                <option value="open">Open</option>
+                <option value="assigned">Assigned to me</option>
+                <option value="all">All</option>
+                <option value="closed">Closed</option>
+              </select>
+              <button onclick="loadSupportChats()" class="border border-outline-variant px-3 py-2 rounded-lg text-sm font-semibold hover:bg-surface-variant flex items-center gap-1">
+                <span class="material-symbols-outlined text-[18px]">refresh</span> Refresh
+              </button>
+              <button onclick="supportLogout()" class="border border-outline-variant px-3 py-2 rounded-lg text-sm font-semibold hover:bg-surface-variant flex items-center gap-1 text-error">
+                <span class="material-symbols-outlined text-[18px]">logout</span> Logout
+              </button>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-220px)]">
+            <!-- Chat list -->
+            <div id="supportChatList" class="bg-white border border-outline-variant rounded-xl overflow-y-auto">
+              <div class="p-4 text-center text-on-surface-variant text-sm">Loading…</div>
+            </div>
+            <!-- Chat detail -->
+            <div id="supportChatDetail" class="lg:col-span-2 bg-white border border-outline-variant rounded-xl flex flex-col overflow-hidden">
+              <div class="flex-1 flex items-center justify-center text-on-surface-variant">
+                <div class="text-center">
+                  <span class="material-symbols-outlined text-5xl mb-2">forum</span>
+                  <p>Select a conversation to start replying</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </main>

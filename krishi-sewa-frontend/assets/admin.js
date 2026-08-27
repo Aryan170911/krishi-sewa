@@ -356,3 +356,401 @@ async function deleteOrder(id) {
 document.getElementById("productModal").addEventListener("click", (e) => {
   if (e.target.id === "productModal") closeProductModal();
 });
+
+// ============================================
+// SUPPORT TAB (uses /api/admin/support/* with cookie auth)
+// ============================================
+const supportAdminState = {
+  loggedIn: false,
+  me: null,
+  chats: [],
+  activeChat: null,
+  messages: [],
+  pollTimer: null
+};
+
+async function supportAdminMe() {
+  try {
+    const r = await fetch(`${API}/admin/support/me`, { credentials: "include" });
+    if (r.ok) {
+      const d = await r.json();
+      supportAdminState.loggedIn = true;
+      supportAdminState.me = d.admin;
+      return true;
+    }
+  } catch {}
+  supportAdminState.loggedIn = false;
+  supportAdminState.me = null;
+  return false;
+}
+
+function showSupportLogin(show) {
+  document.getElementById("supportLoginPanel").classList.toggle("hidden", !show);
+  document.getElementById("supportPanel").classList.toggle("hidden", show);
+}
+
+async function supportLogin(e) {
+  e.preventDefault();
+  const user = document.getElementById("supportLoginUser").value.trim();
+  const pass = document.getElementById("supportLoginPass").value;
+  const errEl = document.getElementById("supportLoginError");
+  errEl.classList.add("hidden");
+  try {
+    const r = await fetch(`${API}/admin/support/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email: user, password: pass })
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || "Login failed");
+    supportAdminState.loggedIn = true;
+    supportAdminState.me = d.admin;
+    showSupportLogin(false);
+    await loadSupportChats();
+    startSupportAdminPolling();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove("hidden");
+  }
+}
+
+async function supportLogout() {
+  try { await fetch(`${API}/admin/support/logout`, { method: "POST", credentials: "include" }); } catch {}
+  stopSupportAdminPolling();
+  supportAdminState.loggedIn = false;
+  supportAdminState.me = null;
+  supportAdminState.chats = [];
+  supportAdminState.activeChat = null;
+  showSupportLogin(true);
+}
+
+async function loadSupportChats() {
+  if (!supportAdminState.loggedIn) return;
+  const filter = document.getElementById("supportStatusFilter")?.value || "open";
+  const list = document.getElementById("supportChatList");
+  try {
+    const r = await fetch(`${API}/admin/support/chats?status=${filter}`, { credentials: "include" });
+    if (!r.ok) {
+      if (r.status === 401) { showSupportLogin(true); return; }
+      throw new Error("Failed to load chats");
+    }
+    supportAdminState.chats = await r.json();
+    renderSupportChatList();
+    updateSupportBadge();
+  } catch (e) {
+    list.innerHTML = `<div class="p-4 text-center text-error text-sm">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderSupportChatList() {
+  const list = document.getElementById("supportChatList");
+  const chats = supportAdminState.chats;
+  if (chats.length === 0) {
+    list.innerHTML = `<div class="p-4 text-center text-on-surface-variant text-sm">No conversations</div>`;
+    return;
+  }
+  list.innerHTML = chats.map(c => {
+    const isActive = supportAdminState.activeChat?.id === c.id;
+    const time = c.last_message_at ? new Date(c.last_message_at) : new Date(c.created_at);
+    const ago = timeAgo(time);
+    const unread = c.unread_for_admin || 0;
+    const statusColor = c.status === "closed" ? "text-on-surface-variant" : "text-primary";
+    return `
+      <button onclick="openSupportChat(${c.id})" class="w-full text-left p-3 border-b border-outline-variant hover:bg-surface-variant transition-colors flex items-start gap-3 ${isActive ? "bg-primary-container/30" : ""}">
+        <div class="h-10 w-10 rounded-full bg-primary-container text-primary flex items-center justify-center shrink-0">
+          <span class="material-symbols-outlined">account_circle</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <p class="font-semibold text-sm ${statusColor} truncate flex-1">${escapeHtml(c.user_name || c.user_email)}</p>
+            ${unread > 0 ? `<span class="bg-error text-on-error text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1.5 flex items-center justify-center">${unread}</span>` : ""}
+          </div>
+          <p class="text-xs text-on-surface-variant truncate">${escapeHtml(c.last_message_preview || c.subject || "")}</p>
+          <p class="text-[10px] text-on-surface-variant mt-0.5">${ago} • ${c.status}</p>
+        </div>
+      </button>
+    `;
+  }).join("");
+}
+
+async function openSupportChat(chatId) {
+  const c = supportAdminState.chats.find(x => x.id === chatId);
+  if (!c) return;
+  supportAdminState.activeChat = c;
+  c.unread_for_admin = 0;
+  renderSupportChatList();
+  updateSupportBadge();
+  await loadSupportMessages(chatId);
+  renderSupportChatDetail();
+  // Start polling this chat
+  startSupportAdminPolling();
+}
+
+async function loadSupportMessages(chatId) {
+  try {
+    const r = await fetch(`${API}/admin/support/chat/${chatId}/messages`, { credentials: "include" });
+    if (!r.ok) throw new Error("Failed to load messages");
+    supportAdminState.messages = await r.json();
+  } catch (e) {
+    supportAdminState.messages = [];
+    console.warn("loadSupportMessages:", e.message);
+  }
+}
+
+function renderSupportChatDetail() {
+  const detail = document.getElementById("supportChatDetail");
+  const c = supportAdminState.activeChat;
+  if (!c) {
+    detail.innerHTML = `<div class="flex-1 flex items-center justify-center text-on-surface-variant">
+      <div class="text-center">
+        <span class="material-symbols-outlined text-5xl mb-2">forum</span>
+        <p>Select a conversation to start replying</p>
+      </div>
+    </div>`;
+    return;
+  }
+  const status = c.status === "closed" ? "Closed" : "Open";
+  const statusClass = c.status === "closed" ? "bg-surface-container text-on-surface-variant" : "bg-primary text-on-primary";
+  detail.innerHTML = `
+    <div class="p-3 border-b border-outline-variant flex items-center gap-3 shrink-0">
+      <div class="h-9 w-9 rounded-full bg-primary-container text-primary flex items-center justify-center">
+        <span class="material-symbols-outlined">account_circle</span>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="font-semibold text-sm truncate">${escapeHtml(c.user_name || c.user_email)}</p>
+        <p class="text-xs text-on-surface-variant truncate">${escapeHtml(c.user_email)} • ${escapeHtml(c.subject || "")}</p>
+      </div>
+      <span class="text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${statusClass}">${status}</span>
+      <button onclick="openUserContext('${c.user_email.replace(/'/g, "\\'")}')" class="text-on-surface-variant hover:text-primary p-2 rounded-lg hover:bg-surface-variant" title="View user context">
+        <span class="material-symbols-outlined text-[20px]">person_search</span>
+      </button>
+      ${c.status !== "closed" ? `<button onclick="closeSupportChat(${c.id})" class="text-error hover:bg-error-container p-2 rounded-lg" title="Close chat">
+        <span class="material-symbols-outlined text-[20px]">close</span>
+      </button>` : ""}
+    </div>
+    <div id="supportMessagesList" class="flex-1 overflow-y-auto p-4 space-y-2 bg-surface-container-lowest">
+      ${renderSupportMessages()}
+    </div>
+    ${c.status !== "closed" ? `
+    <form onsubmit="sendSupportAdminMessage(event)" class="p-3 border-t border-outline-variant flex gap-2 items-end shrink-0">
+      <textarea id="supportAdminInput" rows="1" placeholder="Type your reply..." oninput="autoGrowSupportInput(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); sendSupportAdminMessage(event);}" class="flex-1 resize-none max-h-32 border border-outline-variant rounded-2xl px-3 py-2 text-base focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" style="min-height: 40px;"></textarea>
+      <button type="submit" class="h-10 w-10 shrink-0 rounded-full bg-primary text-on-primary flex items-center justify-center hover:opacity-90">
+        <span class="material-symbols-outlined">send</span>
+      </button>
+    </form>` : `<div class="p-3 border-t border-outline-variant text-center text-sm text-on-surface-variant bg-surface-container">This conversation is closed.</div>`}
+  `;
+  setTimeout(() => {
+    const el = document.getElementById("supportMessagesList");
+    if (el) el.scrollTop = el.scrollHeight;
+  }, 50);
+}
+
+function renderSupportMessages() {
+  if (supportAdminState.messages.length === 0) {
+    return `<div class="text-center text-sm text-on-surface-variant py-4">No messages yet</div>`;
+  }
+  return supportAdminState.messages.map(m => {
+    const isAdmin = m.sender_type === "admin";
+    const isSystem = m.sender_type === "system";
+    if (isSystem) {
+      return `<div class="text-center text-xs text-on-surface-variant italic py-2 px-3 bg-surface-container rounded-lg">${escapeHtml(m.message)}</div>`;
+    }
+    return `
+      <div class="flex ${isAdmin ? "justify-end" : "justify-start"}">
+        <div class="max-w-[80%] ${isAdmin ? "bg-primary text-on-primary" : "bg-white border border-outline-variant"} rounded-2xl px-3 py-2 ${isAdmin ? "rounded-br-sm" : "rounded-bl-sm"}">
+          <p class="text-[10px] font-semibold mb-0.5 ${isAdmin ? "text-on-primary/70" : "text-on-surface-variant"}">${escapeHtml(m.sender_name || m.sender_type)}</p>
+          <p class="text-sm whitespace-pre-wrap break-words">${escapeHtml(m.message)}</p>
+          <p class="text-[10px] mt-1 ${isAdmin ? "text-on-primary/70" : "text-on-surface-variant"}">${new Date(m.created_at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}</p>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function sendSupportAdminMessage(e) {
+  e.preventDefault();
+  if (!supportAdminState.activeChat) return;
+  const input = document.getElementById("supportAdminInput");
+  const msg = input.value.trim();
+  if (!msg) return;
+  // Optimistic
+  const tempMsg = { id: "temp-" + Date.now(), sender_type: "admin", sender_name: supportAdminState.me?.name || "Admin", message: msg, created_at: new Date().toISOString() };
+  supportAdminState.messages.push(tempMsg);
+  input.value = "";
+  input.style.height = "40px";
+  const list = document.getElementById("supportMessagesList");
+  if (list) { list.innerHTML = renderSupportMessages(); list.scrollTop = 999999; }
+  try {
+    const r = await fetch(`${API}/admin/support/chat/${supportAdminState.activeChat.id}/message`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ message: msg })
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || "Send failed");
+    // Replace temp
+    const idx = supportAdminState.messages.findIndex(m => m.id === tempMsg.id);
+    if (idx !== -1) supportAdminState.messages[idx] = d.message;
+    if (list) { list.innerHTML = renderSupportMessages(); list.scrollTop = 999999; }
+  } catch (e) {
+    toast(`Send failed: ${e.message}`);
+  }
+}
+
+async function closeSupportChat(chatId) {
+  if (!confirm("Close this conversation?")) return;
+  try {
+    const r = await fetch(`${API}/admin/support/chat/${chatId}/close`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include"
+    });
+    if (!r.ok) throw new Error("Failed to close");
+    toast("Conversation closed");
+    await loadSupportChats();
+    supportAdminState.activeChat = null;
+    renderSupportChatDetail();
+  } catch (e) {
+    toast(e.message);
+  }
+}
+
+async function openUserContext(email) {
+  // Simple modal: fetch user info + recent orders
+  try {
+    const [u, orders] = await Promise.all([
+      fetch(`${API}/admin/support/user/${encodeURIComponent(email)}`, { credentials: "include" }).then(r => r.json()),
+      fetch(`${API}/orders`, { credentials: "include" }).then(r => r.json()).catch(() => [])
+    ]);
+    const myOrders = (orders || []).filter(o => (o.email || "").toLowerCase() === email.toLowerCase());
+    const html = `
+      <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onclick="if(event.target===this) closeUserContext()">
+        <div class="bg-white rounded-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold text-lg text-primary">User Context</h3>
+            <button onclick="closeUserContext()" class="text-on-surface-variant hover:text-on-surface">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="space-y-3">
+            <div class="bg-surface-container-low rounded-lg p-3">
+              <p class="text-xs text-on-surface-variant">Name</p>
+              <p class="font-semibold">${escapeHtml(u.user?.name || "—")}</p>
+            </div>
+            <div class="bg-surface-container-low rounded-lg p-3">
+              <p class="text-xs text-on-surface-variant">Email</p>
+              <p class="font-mono text-sm">${escapeHtml(u.user?.email || email)}</p>
+            </div>
+            <div class="bg-surface-container-low rounded-lg p-3">
+              <p class="text-xs text-on-surface-variant">Joined</p>
+              <p>${u.user?.created_at ? new Date(u.user.created_at).toLocaleString() : "—"}</p>
+            </div>
+            <div>
+              <p class="text-sm font-semibold mb-2">Recent orders (${myOrders.length})</p>
+              ${myOrders.length === 0 ? `<p class="text-sm text-on-surface-variant">No orders found via your admin session</p>` : myOrders.slice(0, 5).map(o => `
+                <div class="border border-outline-variant rounded-lg p-2 mb-2 text-sm">
+                  <p class="font-mono text-xs">${escapeHtml(o.id)}</p>
+                  <p class="text-xs">${new Date(o.date || o.created_at).toLocaleDateString()} • ₹${o.total} • ${o.status}</p>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    const div = document.createElement("div");
+    div.id = "userContextModal";
+    div.innerHTML = html;
+    document.body.appendChild(div);
+  } catch (e) {
+    toast("Failed to load user context: " + e.message);
+  }
+}
+
+function closeUserContext() {
+  const m = document.getElementById("userContextModal");
+  if (m) m.remove();
+}
+
+function startSupportAdminPolling() {
+  stopSupportAdminPolling();
+  supportAdminState.pollTimer = setInterval(async () => {
+    if (!supportAdminState.loggedIn) return;
+    // Refresh chat list (for unread counts)
+    const filter = document.getElementById("supportStatusFilter")?.value || "open";
+    try {
+      const r = await fetch(`${API}/admin/support/chats?status=${filter}`, { credentials: "include" });
+      if (r.ok) {
+        const newChats = await r.json();
+        const oldTotalUnread = supportAdminState.chats.reduce((s, c) => s + (c.unread_for_admin || 0), 0);
+        supportAdminState.chats = newChats;
+        const newTotalUnread = newChats.reduce((s, c) => s + (c.unread_for_admin || 0), 0);
+        if (newTotalUnread > oldTotalUnread) toast(`${newTotalUnread - oldTotalUnread} new message(s)`);
+        renderSupportChatList();
+        updateSupportBadge();
+      }
+    } catch {}
+    // Refresh active chat messages
+    if (supportAdminState.activeChat) {
+      const before = supportAdminState.messages.length;
+      await loadSupportMessages(supportAdminState.activeChat.id);
+      const after = supportAdminState.messages.length;
+      if (after !== before) {
+        const list = document.getElementById("supportMessagesList");
+        if (list) { list.innerHTML = renderSupportMessages(); list.scrollTop = 999999; }
+      }
+    }
+  }, 4000);
+}
+function stopSupportAdminPolling() {
+  if (supportAdminState.pollTimer) { clearInterval(supportAdminState.pollTimer); supportAdminState.pollTimer = null; }
+}
+
+function updateSupportBadge() {
+  const badge = document.getElementById("supportUnreadBadge");
+  if (!badge) return;
+  const total = supportAdminState.chats.reduce((s, c) => s + (c.unread_for_admin || 0), 0);
+  if (total > 0) { badge.textContent = total; badge.classList.remove("hidden"); }
+  else { badge.classList.add("hidden"); }
+}
+
+function escapeHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
+}
+
+function timeAgo(date) {
+  const now = new Date();
+  const diff = (now - date) / 1000;
+  if (diff < 60) return "just now";
+  if (diff < 3600) return Math.floor(diff/60) + "m ago";
+  if (diff < 86400) return Math.floor(diff/3600) + "h ago";
+  if (diff < 604800) return Math.floor(diff/86400) + "d ago";
+  return date.toLocaleDateString();
+}
+
+function autoGrowSupportInput(el) {
+  el.style.height = "40px";
+  el.style.height = Math.min(el.scrollHeight, 128) + "px";
+}
+
+// Override switchTab to handle Support tab
+const _origSwitchTab = switchTab;
+window.switchTab = function(tab) {
+  _origSwitchTab(tab);
+  if (tab === "support") {
+    supportAdminMe().then(ok => {
+      if (ok) {
+        showSupportLogin(false);
+        loadSupportChats();
+        startSupportAdminPolling();
+      } else {
+        showSupportLogin(true);
+        stopSupportAdminPolling();
+      }
+    });
+  } else {
+    stopSupportAdminPolling();
+  }
+};

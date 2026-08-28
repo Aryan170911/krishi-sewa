@@ -218,6 +218,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   }
+  // PWA install prompt
+  let deferredInstallPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    window.dispatchEvent(new CustomEvent('pwa-installable'));
+  });
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    window.dispatchEvent(new CustomEvent('pwa-installed'));
+  });
+  window.getInstallPrompt = () => deferredInstallPrompt;
 </script>
 </body>
 </html>

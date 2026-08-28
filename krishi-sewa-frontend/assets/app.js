@@ -394,8 +394,83 @@ const state = {
   authPendingPurpose: "", // signup | reset
   recentlyViewed: [], // [{ id, viewedAt }] - in-memory only
   appliedPromo: null, // promo code applied to current checkout
-  unreadNotifications: 0 // count of unread notifications
+  unreadNotifications: 0, // count of unread notifications
+  locale: localStorage.getItem("krishi_locale") || "en" // en | hi
 };
+
+// ============================================
+// I18N — simple translation system
+// ============================================
+const i18n = {
+  en: {
+    "search.placeholder": "Search seeds, fertilizers, tools...",
+    "cart.empty": "Your Cart is Empty",
+    "cart.empty.desc": "Looks like you haven't added any seeds or tools yet. Start cultivating your garden!",
+    "home.title": "Cultivating Change, Harvesting Hope",
+    "shop.title": "Shop",
+    "profile.title": "My Profile",
+    "orders.title": "My Orders",
+    "wishlist.title": "My Wishlist",
+    "search.title": "Search",
+    "about.title": "About Krishi Sewa Foundation",
+    "auth.welcome": "Welcome back",
+    "auth.signup": "Create Account",
+    "auth.verify": "Verify Your Email",
+    "auth.forgot": "Reset Password",
+    "auth.reset": "Set New Password",
+    "checkout.title": "Checkout",
+    "confirmation.title": "Order Confirmed",
+    "common.continue_shopping": "Continue Shopping",
+    "common.view_orders": "View My Orders",
+    "common.cancel": "Cancel",
+    "common.save": "Save",
+    "common.delete": "Delete",
+    "common.edit": "Edit",
+    "common.loading": "Loading...",
+    "common.search": "Search",
+    "common.cart": "Cart",
+    "common.profile": "Profile",
+    "common.home": "Home",
+    "common.saved": "Saved"
+  },
+  hi: {
+    "search.placeholder": "बीज, उर्वरक, औज़ार खोजें...",
+    "cart.empty": "आपका कार्ट खाली है",
+    "cart.empty.desc": "लगता है आपने अभी तक कोई बीज या औज़ार नहीं जोड़ा है। अपना बगीचा लगाना शुरू करें!",
+    "home.title": "बदलाव की खेती, उम्मीद की फसल",
+    "shop.title": "दुकान",
+    "profile.title": "मेरी प्रोफ़ाइल",
+    "orders.title": "मेरे ऑर्डर",
+    "wishlist.title": "मेरी पसंद",
+    "search.title": "खोज",
+    "about.title": "कृषि सेवा फाउंडेशन के बारे में",
+    "auth.welcome": "वापसी पर स्वागत है",
+    "auth.signup": "खाता बनाएं",
+    "auth.verify": "अपना ईमेल सत्यापित करें",
+    "auth.forgot": "पासवर्ड रीसेट",
+    "auth.reset": "नया पासवर्ड सेट करें",
+    "checkout.title": "चेकआउट",
+    "confirmation.title": "ऑर्डर पुष्ट",
+    "common.continue_shopping": "खरीदारी जारी रखें",
+    "common.view_orders": "मेरे ऑर्डर देखें",
+    "common.cancel": "रद्द करें",
+    "common.save": "सहेजें",
+    "common.delete": "हटाएं",
+    "common.edit": "संपादित करें",
+    "common.loading": "लोड हो रहा है...",
+    "common.search": "खोजें",
+    "common.cart": "कार्ट",
+    "common.profile": "प्रोफ़ाइल",
+    "common.home": "होम",
+    "common.saved": "सहेजा गया"
+  }
+};
+function t(key) { return i18n[state.locale]?.[key] || i18n.en[key] || key; }
+function setLocale(l) {
+  state.locale = l;
+  localStorage.setItem("krishi_locale", l);
+  renderApp();
+}
 
 // ============================================
 // UTILITY FUNCTIONS
@@ -698,7 +773,7 @@ function renderMobileBottomNav() {
 function renderFooter() {
   return `
     <footer class="bg-secondary-container w-full mt-auto">
-      <div class="w-full py-section-gap px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto grid grid-cols-1 md:grid-cols-3 gap-stack-lg border-t border-outline-variant/20">
+      <div class="w-full py-section-gap px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto grid grid-cols-1 md:grid-cols-4 gap-stack-lg border-t border-outline-variant/20">
         <div class="flex flex-col gap-stack-sm">
           <span class="text-headline-sm font-headline-sm text-primary">Krishi Sewa Foundation</span>
           <p class="text-body-sm font-body-sm text-on-secondary-container max-w-md">
@@ -731,6 +806,13 @@ function renderFooter() {
             <a href="https://facebook.com" class="h-9 w-9 rounded-full bg-primary text-on-primary flex items-center justify-center hover:scale-110 transition-transform" aria-label="Facebook">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
             </a>
+          </div>
+        </div>
+        <div class="flex flex-col gap-2">
+          <h3 class="font-label-md text-label-md text-primary">Language / भाषा</h3>
+          <div class="flex gap-2">
+            <button onclick="setLocale('en')" class="px-3 py-1.5 rounded-lg text-sm font-semibold ${state.locale === 'en' ? 'bg-primary text-on-primary' : 'bg-surface text-on-surface border border-outline-variant hover:border-primary'}">English</button>
+            <button onclick="setLocale('hi')" class="px-3 py-1.5 rounded-lg text-sm font-semibold ${state.locale === 'hi' ? 'bg-primary text-on-primary' : 'bg-surface text-on-surface border border-outline-variant hover:border-primary'}">हिंदी</button>
           </div>
         </div>
       </div>
@@ -3420,6 +3502,56 @@ function startNotificationsPolling() {
 function stopNotificationsPolling() {
   if (_notifPollTimer) { clearInterval(_notifPollTimer); _notifPollTimer = null; }
 }
+
+// ============================================
+// PWA INSTALL PROMPT
+// ============================================
+function showInstallPrompt() {
+  if (localStorage.getItem("pwa-install-dismissed") === "1") return;
+  if (document.getElementById("pwaInstallBanner")) return;
+  const banner = document.createElement("div");
+  banner.id = "pwaInstallBanner";
+  banner.className = "fixed bottom-20 md:bottom-4 left-2 right-2 md:left-auto md:right-4 md:max-w-sm z-[200] bg-primary text-on-primary rounded-xl shadow-2xl p-4 flex items-center gap-3 animate-slide-up";
+  banner.innerHTML = `
+    <span class="material-symbols-outlined text-[28px] shrink-0">install_mobile</span>
+    <div class="flex-1 min-w-0">
+      <p class="font-bold text-sm">Install Krishi Sewa</p>
+      <p class="text-xs opacity-90">Add to home screen for quick access</p>
+    </div>
+    <button id="pwaInstallBtn" class="bg-on-primary text-primary px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90">Install</button>
+    <button onclick="dismissInstallPrompt()" class="text-on-primary/80 hover:text-on-primary p-1" aria-label="Dismiss">
+      <span class="material-symbols-outlined text-[18px]">close</span>
+    </button>
+  `;
+  document.body.appendChild(banner);
+  document.getElementById("pwaInstallBtn").onclick = installPWA;
+}
+
+function dismissInstallPrompt() {
+  localStorage.setItem("pwa-install-dismissed", "1");
+  document.getElementById("pwaInstallBanner")?.remove();
+}
+
+async function installPWA() {
+  const prompt = window.getInstallPrompt?.();
+  if (!prompt) { toast("Install not available - try your browser menu"); return; }
+  prompt.prompt();
+  const { outcome } = await prompt.userChoice;
+  if (outcome === "accepted") toast("Installing...");
+  dismissInstallPrompt();
+}
+
+// Listen for install prompt
+window.addEventListener("pwa-installable", () => {
+  // Show banner after 30s of being on the site
+  setTimeout(() => {
+    if (state.authUser && !localStorage.getItem("pwa-install-dismissed")) showInstallPrompt();
+  }, 30000);
+});
+window.addEventListener("pwa-installed", () => {
+  localStorage.setItem("pwa-install-dismissed", "1");
+  toast("App installed!");
+});
 
 function searchEscHandler(e) {
   if (e.key === "Escape") closeSearchDialog();

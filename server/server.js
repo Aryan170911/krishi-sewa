@@ -1566,6 +1566,106 @@ async function fireWebhooks(event, payload) {
 }
 
 // ============================================
+// PRODUCT REVIEWS — user-submitted
+// ============================================
+// List reviews for a product (public)
+app.get("/api/reviews/:productId", async (req, res) => {
+  if (!supabase) return res.json([]);
+  const productId = parseInt(req.params.productId);
+  const { data, error } = await supabase.from("product_reviews")
+    .select("id, user_email, user_name, rating, title, body, verified_purchase, helpful_count, created_at")
+    .eq("product_id", productId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) { console.warn("[Supabase] reviews list:", error.message); return res.status(500).json({ error: error.message }); }
+  res.json(data || []);
+});
+
+// Submit a review (requires login + must have ordered this product)
+app.post("/api/reviews/:productId", async (req, res) => {
+  try {
+    const sess = getSession(req);
+    if (!sess) return res.status(401).json({ error: "Login required to submit a review" });
+    if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+    const productId = parseInt(req.params.productId);
+    const rating = parseInt(req.body?.rating);
+    const body = String(req.body?.body || "").trim();
+    const title = String(req.body?.title || "").trim();
+    if (!rating || rating < 1 || rating > 5) return res.status(400).json({ error: "Rating must be 1-5" });
+    if (body.length < 5 || body.length > 2000) return res.status(400).json({ error: "Review must be 5-2000 characters" });
+    if (title.length > 200) return res.status(400).json({ error: "Title too long" });
+    // Check if user has ordered this product (verified purchase)
+    const { data: orders } = await supabase.from("orders")
+      .select("items")
+      .eq("email", sess.email)
+      .is("deleted_at", null);
+    const hasOrdered = (orders || []).some(o => Array.isArray(o.items) && o.items.some(i => parseInt(i.id) === productId));
+    // Get user name
+    const { data: user } = await supabase.from("users").select("name").eq("email", sess.email).maybeSingle();
+    const userName = user?.name || sess.name || sess.email.split("@")[0];
+    const { data, error } = await supabase.from("product_reviews").insert({
+      product_id: productId,
+      user_email: sess.email,
+      user_name: userName,
+      rating,
+      title: title || null,
+      body,
+      verified_purchase: hasOrdered
+    }).select().single();
+    if (error) {
+      if (error.code === "23505") return res.status(409).json({ error: "You've already reviewed this product" });
+      return res.status(500).json({ error: error.message });
+    }
+    logAudit("review:create", { product_id: productId, rating, verified: hasOrdered }, req.ip);
+    res.status(201).json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Mark review as helpful
+app.post("/api/reviews/:productId/:reviewId/helpful", async (req, res) => {
+  try {
+    const sess = getSession(req);
+    if (!sess) return res.status(401).json({ error: "Login required" });
+    if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+    const reviewId = parseInt(req.params.reviewId);
+    // Insert vote (or ignore if already voted)
+    const { error: voteErr } = await supabase.from("review_helpful_votes").insert({
+      review_id: reviewId, user_email: sess.email
+    });
+    if (voteErr && voteErr.code !== "23505") return res.status(500).json({ error: voteErr.message });
+    // Increment helpful count (only first time)
+    if (!voteErr || voteErr.code === "23505") {
+      const { data: rv } = await supabase.from("product_reviews").select("helpful_count").eq("id", reviewId).maybeSingle();
+      if (rv) {
+        await supabase.from("product_reviews").update({ helpful_count: (rv.helpful_count || 0) + 1 }).eq("id", reviewId);
+      }
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Check if user can review a product (has ordered it)
+app.get("/api/reviews/:productId/can-review", async (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.json({ canReview: false, reason: "not_logged_in" });
+  if (!supabase) return res.json({ canReview: false, reason: "db_unavailable" });
+  const productId = parseInt(req.params.productId);
+  // Has ordered?
+  const { data: orders } = await supabase.from("orders")
+    .select("items")
+    .eq("email", sess.email)
+    .is("deleted_at", null);
+  const hasOrdered = (orders || []).some(o => Array.isArray(o.items) && o.items.some(i => parseInt(i.id) === productId));
+  if (!hasOrdered) return res.json({ canReview: false, reason: "not_purchased" });
+  // Already reviewed?
+  const { data: existing } = await supabase.from("product_reviews")
+    .select("id").eq("product_id", productId).eq("user_email", sess.email).is("deleted_at", null).maybeSingle();
+  if (existing) return res.json({ canReview: false, reason: "already_reviewed" });
+  res.json({ canReview: true, verified: true });
+});
+
+// ============================================
 // API KEYS — programmatic admin access
 // ============================================
 app.get("/api/admin/api-keys", requireAdmin, async (req, res) => {

@@ -1377,33 +1377,196 @@ function renderProductSpecificationsTab(product) {
 
 function renderProductReviewsTab(product) {
   return `
-    <div class="space-y-6">
-      ${product.reviews.map(review => `
-        <div class="border-b border-outline-variant/30 pb-6 last:border-0 last:pb-0">
-          <div class="flex justify-between mb-2">
-            <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center">
-                <span class="material-symbols-outlined text-on-secondary-container text-[18px]">person</span>
-              </div>
-              <div>
-                <p class="font-label-md text-label-md text-on-surface">${review.author}</p>
-                <p class="font-body-sm text-body-sm text-on-surface-variant">${review.date}</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-1 text-warning">
-              ${Array.from({length: 5}, (_, i) => `
-                <span class="material-symbols-outlined text-[18px] ${i < review.rating ? 'fill' : ''}">${i < review.rating ? 'star' : 'star_border'}</span>
-              `).join('')}
-            </div>
-          </div>
-          <p class="font-body-md text-body-md text-on-surface">${review.text}</p>
-        </div>
-      `).join('')}
-      <button class="w-full bg-transparent border border-outline-variant text-on-surface-variant py-3 px-6 rounded-lg font-label-md text-label-md hover:bg-surface-container-low transition-colors">
-        View All Reviews
-      </button>
+    <div id="productReviewsContainer">
+      <div class="text-center text-on-surface-variant py-8">Loading reviews...</div>
     </div>
   `;
+}
+
+async function loadProductReviews(productId) {
+  const wrap = document.getElementById("productReviewsContainer");
+  if (!wrap) return;
+  wrap.innerHTML = `<div class="text-center text-on-surface-variant py-8">Loading reviews...</div>`;
+  try {
+    // Load both seed reviews and user-submitted reviews
+    const userReviews = await apiGet(`/reviews/${productId}`) || [];
+    const seedReviews = (state.currentProduct?.reviews || []);
+    const all = [...userReviews, ...seedReviews].map(r => ({
+      author: r.user_name || r.author,
+      rating: r.rating,
+      title: r.title,
+      body: r.body || r.text,
+      date: r.created_at ? new Date(r.created_at).toLocaleDateString() : r.date,
+      verified: r.verified_purchase,
+      helpful: r.helpful_count || 0,
+      id: r.id,
+      isUser: !!r.user_email
+    }));
+    const avg = all.length > 0 ? (all.reduce((s, r) => s + r.rating, 0) / all.length).toFixed(1) : product.rating;
+    const dist = [5, 4, 3, 2, 1].map(n => all.filter(r => r.rating === n).length);
+    wrap.innerHTML = `
+      <div class="space-y-6">
+        <div class="flex flex-col sm:flex-row gap-6 items-start sm:items-center pb-6 border-b border-outline-variant">
+          <div class="text-center sm:text-left">
+            <div class="text-5xl font-bold text-primary">${avg}</div>
+            <div class="flex items-center justify-center sm:justify-start gap-1 mt-1">
+              ${Array.from({length: 5}, (_, i) => `<span class="material-symbols-outlined text-[20px] ${i < Math.round(avg) ? 'fill' : ''} text-warning">${i < Math.round(avg) ? 'star' : 'star_border'}</span>`).join('')}
+            </div>
+            <p class="text-sm text-on-surface-variant mt-1">${all.length} review${all.length !== 1 ? 's' : ''}</p>
+          </div>
+          <div class="flex-1 w-full">
+            ${[5, 4, 3, 2, 1].map((n, i) => `
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-xs w-6">${n}★</span>
+                <div class="flex-1 h-2 bg-surface-container rounded overflow-hidden">
+                  <div class="h-full bg-warning" style="width: ${all.length > 0 ? (dist[i] / all.length * 100) : 0}%"></div>
+                </div>
+                <span class="text-xs w-6 text-on-surface-variant">${dist[i]}</span>
+              </div>
+            `).join("")}
+          </div>
+          <div id="reviewWriteBtn"></div>
+        </div>
+        ${all.length === 0 ? `
+          <p class="text-center text-on-surface-variant py-8">No reviews yet. Be the first to review this product!</p>
+        ` : `
+          <div class="space-y-4">
+            ${all.map(r => `
+              <div class="border-b border-outline-variant/30 pb-4 last:border-0">
+                <div class="flex justify-between mb-2">
+                  <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-full bg-primary-container text-primary flex items-center justify-center font-bold text-sm">
+                      ${escapeHtml((r.author || "U")[0].toUpperCase())}
+                    </div>
+                    <div>
+                      <p class="font-semibold text-on-surface flex items-center gap-2">
+                        ${escapeHtml(r.author)}
+                        ${r.verified ? '<span class="text-[10px] font-bold bg-primary text-on-primary px-2 py-0.5 rounded-full">VERIFIED</span>' : ''}
+                      </p>
+                      <p class="text-xs text-on-surface-variant">${escapeHtml(r.date)}</p>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-1 text-warning">
+                    ${Array.from({length: 5}, (_, i) => `<span class="material-symbols-outlined text-[18px] ${i < r.rating ? 'fill' : ''}">${i < r.rating ? 'star' : 'star_border'}</span>`).join('')}
+                  </div>
+                </div>
+                ${r.title ? `<p class="font-semibold text-on-surface mb-1">${escapeHtml(r.title)}</p>` : ''}
+                <p class="text-sm text-on-surface">${escapeHtml(r.body)}</p>
+                <div class="flex items-center gap-3 mt-2">
+                  ${r.id ? `<button onclick="markReviewHelpful(${r.id}, ${productId})" class="text-xs text-on-surface-variant hover:text-primary flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[14px]">thumb_up</span> Helpful${r.helpful > 0 ? ` (${r.helpful})` : ""}
+                  </button>` : ''}
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        `}
+      </div>
+    `;
+    // Show "Write a review" button if eligible
+    await renderWriteReviewButton(productId);
+  } catch (e) {
+    wrap.innerHTML = `<div class="text-center text-error py-8">Failed to load reviews: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function renderWriteReviewButton(productId) {
+  const wrap = document.getElementById("reviewWriteBtn");
+  if (!wrap) return;
+  try {
+    const data = await apiGet(`/reviews/${productId}/can-review`);
+    if (data.canReview) {
+      wrap.innerHTML = `<button onclick="openReviewForm(${productId})" class="bg-primary text-on-primary px-4 py-2 rounded-lg font-semibold text-sm flex items-center gap-1">
+        <span class="material-symbols-outlined text-[18px]">edit</span> Write a Review
+      </button>`;
+    } else if (data.reason === "already_reviewed") {
+      wrap.innerHTML = `<span class="text-xs text-on-surface-variant">✓ You've reviewed this</span>`;
+    } else if (data.reason === "not_purchased") {
+      wrap.innerHTML = `<span class="text-xs text-on-surface-variant">Buy to review</span>`;
+    } else if (data.reason === "not_logged_in") {
+      wrap.innerHTML = `<button onclick="navigateTo('auth')" class="text-xs text-primary underline">Log in to review</button>`;
+    }
+  } catch {}
+}
+
+function openReviewForm(productId) {
+  const html = `
+    <div class="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center p-4" onclick="if(event.target===this) closeReviewForm()">
+      <div class="bg-white rounded-2xl max-w-md w-full p-6" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-bold text-lg text-primary">Write a Review</h3>
+          <button onclick="closeReviewForm()" class="text-on-surface-variant hover:text-on-surface">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <form onsubmit="submitReview(event, ${productId})" class="space-y-3">
+          <div>
+            <label class="block text-sm font-semibold mb-1">Rating</label>
+            <div class="flex gap-1" id="ratingPicker">
+              ${[1, 2, 3, 4, 5].map(n => `<button type="button" onclick="pickRating(${n})" data-rating="${n}" class="material-symbols-outlined text-[32px] text-outline hover:text-warning">star_border</button>`).join("")}
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1">Title (optional)</label>
+            <input id="reviewTitle" maxlength="100" placeholder="Sum up your experience" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1">Your review</label>
+            <textarea id="reviewBody" rows="4" required minlength="5" maxlength="2000" placeholder="What did you like or dislike?" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"></textarea>
+          </div>
+          <div class="flex gap-2">
+            <button type="button" onclick="closeReviewForm()" class="flex-1 border border-outline-variant py-2 rounded-lg font-semibold">Cancel</button>
+            <button type="submit" class="flex-1 bg-primary text-on-primary py-2 rounded-lg font-semibold">Submit</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  const div = document.createElement("div");
+  div.id = "reviewFormModal";
+  div.innerHTML = html;
+  document.body.appendChild(div);
+}
+
+let _pickedRating = 0;
+function pickRating(n) {
+  _pickedRating = n;
+  document.querySelectorAll("#ratingPicker button").forEach((b, i) => {
+    const filled = i < n;
+    b.classList.toggle("text-warning", filled);
+    b.classList.toggle("text-outline", !filled);
+    b.textContent = filled ? "star" : "star_border";
+  });
+}
+
+function closeReviewForm() {
+  document.getElementById("reviewFormModal")?.remove();
+  _pickedRating = 0;
+}
+
+async function submitReview(e, productId) {
+  e.preventDefault();
+  if (_pickedRating === 0) { toast("Pick a rating"); return; }
+  const title = document.getElementById("reviewTitle")?.value || "";
+  const body = document.getElementById("reviewBody")?.value || "";
+  try {
+    const r = await apiPost(`/reviews/${productId}`, { rating: _pickedRating, title, body });
+    if (r.error) throw new Error(r.error);
+    toast("Review submitted!");
+    closeReviewForm();
+    loadProductReviews(productId);
+  } catch (err) {
+    toast("Failed: " + err.message);
+  }
+}
+
+async function markReviewHelpful(reviewId, productId) {
+  if (!state.authUser) { toast("Log in to mark as helpful"); return; }
+  try {
+    await apiPost(`/reviews/${productId}/${reviewId}/helpful`);
+    toast("Thanks for the feedback!");
+    loadProductReviews(productId);
+  } catch (e) { toast("Failed: " + e.message); }
 }
 
 function showProductTab(tabName) {
@@ -1431,6 +1594,7 @@ function showProductTab(tabName) {
         break;
       case 'reviews':
         content.innerHTML = renderProductReviewsTab(product);
+        loadProductReviews(product.id);
         break;
     }
   }

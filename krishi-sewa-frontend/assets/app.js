@@ -2142,6 +2142,15 @@ function renderOrdersPage() {
               <button class="bg-transparent border border-outline-variant text-on-surface-variant px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-surface-container-low transition-colors" onclick="trackOrder('${order.id}')">
                 <span class="material-symbols-outlined mr-1">local_shipping</span> Track
               </button>
+              ${(order.status === 'processing' || order.status === 'shipped' || order.status === 'confirmed') && !order.cancellation_requested ? `
+                <button class="bg-transparent border border-error text-error px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-error-container transition-colors" onclick="requestCancellation('${order.id}')">
+                  <span class="material-symbols-outlined mr-1">cancel</span> Request Cancellation
+                </button>
+              ` : order.cancellation_requested && order.status !== 'cancelled' ? `
+                <span class="text-xs text-warning font-semibold flex items-center gap-1 px-2 py-1 bg-warning/10 rounded">
+                  <span class="material-symbols-outlined text-[16px]">pending</span> Cancellation pending
+                </span>
+              ` : ''}
               <button class="bg-transparent border border-outline-variant text-on-surface-variant px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-surface-container-low transition-colors" onclick="reorderItems('${order.id}')">
                 <span class="material-symbols-outlined mr-1">replay</span> Buy Again
               </button>
@@ -3075,6 +3084,23 @@ function viewOrderDetails(orderId) {
     state.lastOrder = order;
     navigateTo('confirmation');
   }
+}
+
+function requestCancellation(orderId) {
+  const order = state.orders.find(o => o.id === orderId);
+  if (!order) return;
+  const reason = prompt(`Request cancellation for order ${orderId}\n\nWhy are you cancelling? (5+ characters):`, "");
+  if (!reason || reason.trim().length < 5) { toast("Please provide a reason (5+ characters)"); return; }
+  if (!confirm("Submit cancellation request? Admin will review and respond.")) return;
+  apiPost(`/orders/${encodeURIComponent(orderId)}/request-cancel`, { reason: reason.trim() })
+    .then(r => {
+      if (r.error) { toast("Failed: " + r.error); return; }
+      toast("Cancellation requested. Admin will review.");
+      const o = state.orders.find(x => x.id === orderId);
+      if (o) o.cancellation_requested = true;
+      renderApp();
+    })
+    .catch(e => toast("Failed: " + e.message));
 }
 
 async function trackOrder(orderId) {

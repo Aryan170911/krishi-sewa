@@ -1459,6 +1459,39 @@ app.post("/api/admin/support/chat/:id/unassign", requireAdminAuth, async (req, r
 // ============================================
 // ORDER EVENTS — status history
 // ============================================
+// User requests cancellation of their order
+app.post("/api/orders/:id/request-cancel", async (req, res) => {
+  try {
+    const sess = getSession(req);
+    if (!sess) return res.status(401).json({ error: "Login required" });
+    if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+    const id = decodeURIComponent(req.params.id);
+    const reason = String(req.body?.reason || "").trim();
+    if (reason.length < 5 || reason.length > 1000) return res.status(400).json({ error: "Reason must be 5-1000 characters" });
+    // Verify ownership
+    const { data: order } = await supabase.from("orders").select("email, status, cancellation_requested").eq("id", id).maybeSingle();
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (order.email !== sess.email) return res.status(403).json({ error: "Forbidden" });
+    if (["cancelled", "refunded", "delivered"].includes(order.status)) {
+      return res.status(400).json({ error: `Order already ${order.status}, cannot cancel` });
+    }
+    if (order.cancellation_requested) {
+      return res.status(400).json({ error: "Cancellation already requested" });
+    }
+    const { data, error } = await supabase.from("orders").update({
+      cancellation_requested: true,
+      cancellation_reason: reason,
+      cancellation_requested_at: new Date().toISOString()
+    }).eq("id", id).select().single();
+    if (error) return res.status(500).json({ error: error.message });
+    // Log event
+    newOrderEvent(id, "cancellation_requested", sess.email, "user", { reason });
+    // Notify admin via notifications (all admin emails? for now just log)
+    logAudit("order:cancel_request", { id, reason }, req.ip);
+    res.json({ ok: true, message: "Cancellation requested. Admin will review.", order: data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get("/api/orders/:id/events", async (req, res) => {
   const sess = getSession(req);
   if (!sess) return res.status(401).json({ error: "Login required" });
@@ -2103,6 +2136,53 @@ app.post("/api/orders", orderLimiter, async (req, res) => {
   if (order.email) sendOrderEmail(order.email, order, "created");
   res.status(201).json(order);
 });
+// Admin: list orders with pending cancellation requests
+app.get("/api/admin/cancellations", requireAdmin, async (req, res) => {
+  try {
+    if (!supabase) return res.json([]);
+    const { data, error } = await supabase.from("orders")
+      .select("id, email, user_name, items, total, status, cancellation_reason, cancellation_requested_at, created_at")
+      .eq("cancellation_requested", true)
+      .neq("status", "cancelled")
+      .neq("status", "refunded")
+      .order("cancellation_requested_at", { ascending: true });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Admin: resolve cancellation (approve = cancel, reject = unmark)
+app.post("/api/admin/orders/:id/resolve-cancel", requireAdmin, async (req, res) => {
+  try {
+    if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+    const id = decodeURIComponent(req.params.id);
+    const { approve } = req.body || {};
+    if (approve) {
+      // Approve: cancel the order
+      const { data, error } = await supabase.from("orders").update({
+        status: "cancelled",
+        cancellation_resolved_at: new Date().toISOString(),
+        cancellation_resolved_by: req.adminEmail || "admin"
+      }).eq("id", id).select().single();
+      if (error) return res.status(500).json({ error: error.message });
+      newOrderEvent(id, "cancellation_approved", req.adminEmail, "admin", {});
+      logAudit("order:cancel_approve", { id }, req.ip);
+      res.json(data);
+    } else {
+      // Reject: unmark cancellation request
+      const { data, error } = await supabase.from("orders").update({
+        cancellation_requested: false,
+        cancellation_resolved_at: new Date().toISOString(),
+        cancellation_resolved_by: req.adminEmail || "admin"
+      }).eq("id", id).select().single();
+      if (error) return res.status(500).json({ error: error.message });
+      newOrderEvent(id, "cancellation_rejected", req.adminEmail, "admin", {});
+      logAudit("order:cancel_reject", { id }, req.ip);
+      res.json(data);
+    }
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.put("/api/orders/:id/status", requireAdmin, async (req, res) => {
   const id = decodeURIComponent(req.params.id);
   const { status } = req.body;

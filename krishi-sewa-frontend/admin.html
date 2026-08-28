@@ -108,6 +108,8 @@ tailwind.config = {
       </button>
       <button data-tab="orders" class="admin-tab flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-semibold text-on-surface-variant hover:bg-surface-variant">
         <span class="material-symbols-outlined text-[20px]">receipt_long</span> Orders
+        <span class="ml-auto text-xs text-on-surface-variant">Cancellations:</span>
+        <button onclick="event.stopPropagation(); showPendingCancellationsModal();" class="text-xs bg-error text-on-error px-2 py-0.5 rounded-full font-bold hover:opacity-80" id="cancelBadgeBtn">0</button>
       </button>
       <button data-tab="support" class="admin-tab flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-semibold text-on-surface-variant hover:bg-surface-variant">
         <span class="material-symbols-outlined text-[20px]">support_agent</span> Support

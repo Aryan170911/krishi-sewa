@@ -108,6 +108,10 @@ async function initAdmin() {
   } catch {
     document.getElementById("apiStatus").textContent = "● Offline";
   }
+  // Check pending cancellation requests
+  renderPendingCancellationsBadge();
+  // Poll for new requests every 30s
+  setInterval(renderPendingCancellationsBadge, 30000);
 }
 
 async function loadStats() {
@@ -496,6 +500,92 @@ async function loadSupportMessages(chatId) {
     supportAdminState.messages = [];
     console.warn("loadSupportMessages:", e.message);
   }
+}
+
+// Admin: load pending cancellation requests
+async function loadPendingCancellations() {
+  try {
+    const r = await fetch(`${API}/admin/cancellations`, { credentials: "include" });
+    if (!r.ok) return [];
+    return await r.json();
+  } catch { return []; }
+}
+
+async function renderPendingCancellationsBadge() {
+  const c = await loadPendingCancellations();
+  const btn = document.getElementById("cancelBadgeBtn");
+  if (btn) {
+    btn.textContent = c.length;
+    btn.classList.toggle("hidden", c.length === 0);
+  }
+}
+
+function showPendingCancellationsModal() {
+  const existing = document.getElementById("cancelRequestsModal");
+  if (existing) { existing.remove(); return; }
+  const div = document.createElement("div");
+  div.id = "cancelRequestsModal";
+  div.className = "fixed inset-0 z-[80] bg-black/40 flex items-center justify-center p-4";
+  div.onclick = (e) => { if (e.target === div) div.remove(); };
+  div.innerHTML = `
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-bold text-lg text-error flex items-center gap-2">
+          <span class="material-symbols-outlined">pending_actions</span>
+          Pending Cancellation Requests
+        </h3>
+        <button onclick="document.getElementById('cancelRequestsModal').remove()" class="text-on-surface-variant hover:text-on-surface">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div id="cancelRequestsList"><p class="text-on-surface-variant text-center py-4">Loading...</p></div>
+    </div>
+  `;
+  document.body.appendChild(div);
+  loadPendingCancellationsIntoModal();
+}
+
+async function loadPendingCancellationsIntoModal() {
+  const wrap = document.getElementById("cancelRequestsList");
+  if (!wrap) return;
+  const items = await loadPendingCancellations();
+  if (items.length === 0) {
+    wrap.innerHTML = `<p class="text-on-surface-variant text-center py-4">No pending requests</p>`;
+    return;
+  }
+  wrap.innerHTML = items.map(o => `
+    <div class="border border-outline-variant rounded-lg p-4 mb-3">
+      <div class="flex items-center justify-between mb-2">
+        <div>
+          <p class="font-mono text-sm font-bold">${escapeHtml(o.id)}</p>
+          <p class="text-xs text-on-surface-variant">${escapeHtml(o.user_name || o.email)} • ₹${o.total}</p>
+        </div>
+        <span class="text-xs px-2 py-1 rounded-full bg-warning/20 text-warning font-semibold">${escapeHtml(o.status)}</span>
+      </div>
+      <p class="text-sm bg-surface-container-low p-2 rounded mb-2 italic">"${escapeHtml(o.cancellation_reason || "")}"</p>
+      <p class="text-xs text-on-surface-variant mb-3">Requested ${timeAgo(new Date(o.cancellation_requested_at))}</p>
+      <div class="flex gap-2">
+        <button onclick="resolveCancel('${escapeHtml(o.id)}', true)" class="flex-1 bg-error text-on-error py-2 rounded-lg font-semibold text-sm hover:opacity-90">Approve Cancellation</button>
+        <button onclick="resolveCancel('${escapeHtml(o.id)}', false)" class="flex-1 border border-outline-variant text-on-surface-variant py-2 rounded-lg font-semibold text-sm hover:bg-surface-variant">Reject</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function resolveCancel(orderId, approve) {
+  try {
+    const r = await fetch(`${API}/admin/orders/${encodeURIComponent(orderId)}/resolve-cancel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHeaders() },
+      credentials: "include",
+      body: JSON.stringify({ approve })
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || "Failed");
+    toast(approve ? "Order cancelled" : "Cancellation rejected");
+    await loadPendingCancellationsIntoModal();
+    renderPendingCancellationsBadge();
+  } catch (e) { toast("Failed: " + e.message); }
 }
 
 function renderSupportChatDetail() {

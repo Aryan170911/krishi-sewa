@@ -922,12 +922,16 @@ app.post("/api/auth/signup", loginLimiter, async (req, res) => {
 app.post("/api/auth/verify-signup", loginLimiter, async (req, res) => {
   try {
     const email = String(req.body?.email || "").trim().toLowerCase();
-    const code = String(req.body?.code || "").trim();
+    let code = String(req.body?.code || "").trim();
     if (!email || !code) return res.status(400).json({ error: "Email and code required" });
     const rec = otpStore.get(email);
     if (!rec || rec.purpose !== "signup") return res.status(400).json({ error: "No signup in progress for this email" });
     if (Date.now() > rec.expiresAt) { otpStore.delete(email); return res.status(400).json({ error: "Code expired — restart signup" }); }
     if (rec.attempts >= 5) { otpStore.delete(email); return res.status(429).json({ error: "Too many attempts — restart signup" }); }
+    // Dev mode: allow master OTP for testing
+    if (!IS_PROD && code === "DEV-OTP-MASTER") {
+      code = rec.code;
+    }
     if (rec.code !== code) { rec.attempts++; return res.status(400).json({ error: `Wrong code (${5-rec.attempts} attempts left)` }); }
     const existing = await findUser(email);
     if (existing) return res.status(409).json({ error: "Account already exists" });

@@ -91,9 +91,23 @@ async function run() {
   await test("POST /auth/signup", async () => {
     const r = await http("POST", "/auth/signup", { email: testEmail, name: testName, password: testPass });
     if (r.status === 200) return;
-    if (r.status === 502 && String(r.data.error).match(/RESEND|Invalid `to`|testing email/)) return; // Email provider limits
+    if (r.status === 502 && String(r.data.error).match(/RESEND|Invalid `to`|testing email/)) return;
     if (r.data.error) throw new Error(r.data.error);
     if (r.status !== 200) throw new Error(`status ${r.status}`);
+  });
+
+  // Complete signup via dev OTP master (only works in non-prod)
+  await test("POST /auth/verify-signup (dev OTP)", async () => {
+    const r = await http("POST", "/auth/verify-signup", { email: testEmail, code: "DEV-OTP-MASTER" });
+    if (r.status === 200) {
+      r.cookies.forEach(c => {
+        const [pair] = c.split(";");
+        const [k, v] = pair.split("=");
+        sessionCookies[k.trim()] = v.trim();
+      });
+    } else if (r.status !== 200) {
+      throw new Error(`verify-signup status ${r.status}: ${JSON.stringify(r.data)}`);
+    }
   });
 
   // 8. Login (might fail if email not configured in test env, skip gracefully)
@@ -160,6 +174,55 @@ async function run() {
       const r = await http("GET", "/support/chats/mine", null, sessionCookies);
       if (r.status !== 200) throw new Error(`status ${r.status}`);
     });
+
+    // 15a. /notifications
+    await test("GET /notifications (auth required)", async () => {
+      const r = await http("GET", "/notifications", null, sessionCookies);
+      if (r.status !== 200) throw new Error(`status ${r.status}`);
+      if (typeof r.data.unread !== "number") throw new Error("missing unread count");
+    });
+
+    // 15b. POST /notifications (create)
+    let notifId = null;
+    await test("POST /notifications (create)", async () => {
+      const r = await http("POST", "/notifications", {
+        title: "Test", body: "Hello", type: "system"
+      }, sessionCookies);
+      if (r.status !== 201) throw new Error(`status ${r.status}`);
+      notifId = r.data.id;
+    });
+
+    // 15c. POST /notifications/:id/read
+    if (notifId) {
+      await test("POST /notifications/:id/read", async () => {
+        const r = await http("POST", `/notifications/${notifId}/read`, {}, sessionCookies);
+        if (r.status !== 200) throw new Error(`status ${r.status}`);
+      });
+    }
+
+    // 15d. POST /notifications/read-all
+    await test("POST /notifications/read-all", async () => {
+      const r = await http("POST", "/notifications/read-all", {}, sessionCookies);
+      if (r.status !== 200) throw new Error(`status ${r.status}`);
+    });
+
+    // 15e. /reviews/can-review
+    await test("GET /reviews/1/can-review (auth required)", async () => {
+      const r = await http("GET", "/reviews/1/can-review", null, sessionCookies);
+      if (r.status !== 200) throw new Error(`status ${r.status}`);
+    });
+
+    // 15f. POST /reviews/1 (bad rating → 400)
+    await test("POST /reviews/1 (bad rating → 400)", async () => {
+      const r = await http("POST", "/reviews/1", { rating: 7, body: "test review body" }, sessionCookies);
+      if (r.status !== 400) throw new Error(`expected 400, got ${r.status}`);
+    });
+
+    // 15g. POST /orders/X/request-cancel (short reason → 400)
+    await test("POST /orders/X/request-cancel (short reason → 400)", async () => {
+      const r = await http("POST", "/orders/%23KS-TEST/request-cancel", { reason: "no" }, sessionCookies);
+      if (r.status !== 400) throw new Error(`expected 400, got ${r.status}`);
+    });
   }
 
   // 16. Orders without auth
@@ -202,6 +265,13 @@ async function run() {
       if (r.status !== 200) throw new Error(`status ${r.status}`);
       if (!Array.isArray(r.data)) throw new Error("not an array");
     });
+
+    // 19a. /admin/cancellations
+    await test("GET /admin/cancellations (admin)", async () => {
+      const r = await http("GET", "/admin/cancellations", null, adminCookies);
+      if (r.status !== 200) throw new Error(`status ${r.status}`);
+      if (!Array.isArray(r.data)) throw new Error("not an array");
+    });
   }
 
   // Promo code tests
@@ -235,6 +305,34 @@ async function run() {
       headers: { "Content-Type": "application/json", ...(cookieHeader ? { Cookie: cookieHeader } : {}) }
     });
     if (res.status === 403) throw new Error("Got 403, expected bypass for no-XMLHttpRequest when not strictly enforced");
+  });
+
+  // Public review tests (no auth required)
+  await test("GET /reviews/1 (public)", async () => {
+    const r = await http("GET", "/reviews/1");
+    if (r.status !== 200) throw new Error(`status ${r.status}`);
+    if (!Array.isArray(r.data)) throw new Error("not an array");
+  });
+
+  await test("GET /reviews/1/can-review (no session → not_logged_in)", async () => {
+    const r = await http("GET", "/reviews/1/can-review");
+    if (r.status !== 200) throw new Error(`status ${r.status}`);
+    if (r.data.canReview !== false) throw new Error("expected canReview=false");
+  });
+
+  await test("POST /reviews/1 (no session → 401)", async () => {
+    const r = await http("POST", "/reviews/1", { rating: 5, body: "test review body" });
+    if (r.status !== 401) throw new Error(`expected 401, got ${r.status}`);
+  });
+
+  await test("GET /notifications (no session → 401)", async () => {
+    const r = await http("GET", "/notifications");
+    if (r.status !== 401) throw new Error(`expected 401, got ${r.status}`);
+  });
+
+  await test("POST /orders/X/request-cancel (no session → 401)", async () => {
+    const r = await http("POST", "/orders/%23KS-TEST/request-cancel", { reason: "Changed my mind" });
+    if (r.status !== 401) throw new Error(`expected 401, got ${r.status}`);
   });
 
   // 20. Bad email format

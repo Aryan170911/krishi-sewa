@@ -623,7 +623,7 @@ function renderMobileDrawer() {
 
   return `
     <div class="md:hidden fixed inset-0 z-[55]" onclick="closeMobileMenu()">
-      <div class="absolute inset-0 bg-inverse-surface/40"></div>
+      <div class="absolute inset-0 bg-inverse-surface/40 animate-fade-in"></div>
       <nav class="absolute left-0 top-0 h-full w-[280px] bg-surface border-r border-outline-variant shadow-xl flex flex-col py-6 drawer-slide-in" onclick="event.stopPropagation()">
         <div class="px-6 mb-8">
           <h2 class="font-headline-lg text-headline-lg text-primary">Krishi Sewa Foundation</h2>
@@ -3369,6 +3369,16 @@ async function init() {
     }
     .animate-slide-up { animation: slideUp 0.3s ease-out; }
     .animate-fade-out { animation: fadeOut 0.3s ease-in forwards; }
+    @keyframes drawerSlideIn {
+      from { transform: translateX(-100%); }
+      to { transform: translateX(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .drawer-slide-in { animation: drawerSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+    .animate-fade-in { animation: fadeIn 0.2s ease-out; }
     .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
     .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   `;

@@ -8,7 +8,9 @@
 <meta name="keywords" content="Krishi Sewa, heritage seeds, organic farming, Indian agriculture, farmer empowerment, sustainable agriculture, heirloom seeds">
 <meta name="author" content="Krishi Sewa Foundation">
 <meta name="theme-color" content="#012d1d">
+<link rel="manifest" href="/manifest.json">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌾</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌾</text></svg>">
 <link rel="canonical" href="https://krishi-sewa.example.com/">
 <!-- Open Graph -->
 <meta property="og:title" content="Krishi Sewa Foundation — Cultivating Change, Harvesting Hope">
@@ -212,5 +214,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 </div>
 <div id="app-content"></div>
 <script src="assets/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+</script>
 </body>
 </html>

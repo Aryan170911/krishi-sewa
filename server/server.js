@@ -134,6 +134,13 @@ app.use(express.static(frontendPath, {
       res.setHeader("Expires", "0");
     } else if (/\.(js|css)$/.test(filePath)) {
       res.setHeader("Cache-Control", "public, max-age=300");
+    } else if (filePath.endsWith("manifest.json")) {
+      res.setHeader("Content-Type", "application/manifest+json");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+    } else if (filePath.endsWith("sw.js")) {
+      res.setHeader("Content-Type", "application/javascript");
+      res.setHeader("Service-Worker-Allowed", "/");
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     }
   }
 }));

@@ -3030,16 +3030,16 @@ function openSearchDialog() {
   overlay.className = "fixed inset-0 z-[200] bg-inverse-surface/60 backdrop-blur-sm flex items-start justify-center pt-[10vh] px-4";
   overlay.onclick = (e) => { if (e.target === overlay) closeSearchDialog(); };
   overlay.innerHTML = `
-    <div class="w-full max-w-2xl bg-surface rounded-2xl shadow-2xl border border-outline-variant overflow-hidden" onclick="event.stopPropagation()">
+    <div class="w-full max-w-2xl bg-surface rounded-2xl shadow-2xl border border-outline-variant overflow-hidden animate-fade-in" onclick="event.stopPropagation()">
       <form onsubmit="event.preventDefault(); state.searchQuery=this.q.value.trim(); navigateTo('search'); closeSearchDialog();" class="flex items-center gap-3 p-4 border-b border-outline-variant">
         <span class="material-symbols-outlined text-on-surface-variant" aria-hidden="true">search</span>
-        <input name="q" type="search" placeholder="Search seeds, fertilizers, tools... (Ctrl+K)" autofocus class="flex-1 bg-transparent outline-none text-lg" autocomplete="off">
+        <input id="krishiSearchInput" name="q" type="search" placeholder="Search seeds, fertilizers, tools... (Ctrl+K)" autofocus class="flex-1 bg-transparent outline-none text-lg" autocomplete="off">
         <kbd class="hidden sm:inline-block text-[10px] bg-surface-container px-1.5 py-0.5 rounded border border-outline-variant text-on-surface-variant font-mono">Esc</kbd>
         <button type="button" onclick="closeSearchDialog()" class="text-on-surface-variant hover:text-on-surface p-1" aria-label="Close search">
           <span class="material-symbols-outlined">close</span>
         </button>
       </form>
-      <div class="p-3 text-xs text-on-surface-variant">
+      <div id="krishiSearchResults" class="p-3 text-xs text-on-surface-variant">
         <p class="mb-2">Quick links</p>
         <div class="flex flex-wrap gap-2">
           <button onclick="state.searchQuery='tomato'; navigateTo('search'); closeSearchDialog();" class="px-3 py-1.5 bg-surface-container-low rounded-full hover:bg-primary-container hover:text-on-primary-container text-sm">tomato</button>
@@ -3051,7 +3051,53 @@ function openSearchDialog() {
     </div>
   `;
   document.body.appendChild(overlay);
-  setTimeout(() => overlay.querySelector("input")?.focus(), 50);
+  setTimeout(() => {
+    const input = overlay.querySelector("#krishiSearchInput");
+    input?.focus();
+    let timer = null;
+    input?.addEventListener("input", () => {
+      clearTimeout(timer);
+      const q = input.value.trim();
+      if (q.length < 2) {
+        const results = document.getElementById("krishiSearchResults");
+        if (results) results.innerHTML = `<p class="mb-2 text-on-surface-variant">Quick links</p>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="state.searchQuery='tomato'; navigateTo('search'); closeSearchDialog();" class="px-3 py-1.5 bg-surface-container-low rounded-full hover:bg-primary-container hover:text-on-primary-container text-sm">tomato</button>
+            <button onclick="state.searchQuery='fertilizer'; navigateTo('search'); closeSearchDialog();" class="px-3 py-1.5 bg-surface-container-low rounded-full hover:bg-primary-container hover:text-on-primary-container text-sm">fertilizer</button>
+            <button onclick="state.searchQuery='tools'; navigateTo('search'); closeSearchDialog();" class="px-3 py-1.5 bg-surface-container-low rounded-full hover:bg-primary-container hover:text-on-primary-container text-sm">tools</button>
+            <button onclick="state.searchQuery='seeds'; navigateTo('search'); closeSearchDialog();" class="px-3 py-1.5 bg-surface-container-low rounded-full hover:bg-primary-container hover:text-on-primary-container text-sm">seeds</button>
+          </div>`;
+        return;
+      }
+      timer = setTimeout(async () => {
+        const results = document.getElementById("krishiSearchResults");
+        if (!results) return;
+        results.innerHTML = `<p class="text-on-surface-variant">Searching "${escapeHtml(q)}"...</p>`;
+        try {
+          const data = await apiGet(`/search?q=${encodeURIComponent(q)}`);
+          if (!data || data.length === 0) {
+            results.innerHTML = `<p class="text-on-surface-variant">No results for "${escapeHtml(q)}"</p>`;
+            return;
+          }
+          results.innerHTML = `<p class="mb-2 font-semibold text-on-surface">${data.length} result(s)</p>
+            <div class="space-y-1 max-h-80 overflow-y-auto">
+              ${data.slice(0, 8).map(p => `
+                <button onclick="closeSearchDialog(); navigateTo('product', { productId: ${p.id} });" class="w-full text-left flex items-center gap-3 p-2 rounded-lg hover:bg-surface-container-low flex items-center">
+                  <img src="${escapeHtml(p.image)}" alt="" class="h-10 w-10 rounded object-cover">
+                  <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-sm truncate">${escapeHtml(p.name)}</p>
+                    <p class="text-xs text-on-surface-variant">${escapeHtml(p.category)}</p>
+                  </div>
+                  <span class="text-primary font-bold text-sm">₹${p.price}</span>
+                </button>
+              `).join("")}
+            </div>`;
+        } catch (e) {
+          results.innerHTML = `<p class="text-error">Search failed</p>`;
+        }
+      }, 250);
+    });
+  }, 50);
   document.addEventListener("keydown", searchEscHandler);
 }
 

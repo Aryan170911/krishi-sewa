@@ -393,7 +393,8 @@ const state = {
   authPendingEmail: "",
   authPendingPurpose: "", // signup | reset
   recentlyViewed: [], // [{ id, viewedAt }] - in-memory only
-  appliedPromo: null // promo code applied to current checkout
+  appliedPromo: null, // promo code applied to current checkout
+  unreadNotifications: 0 // count of unread notifications
 };
 
 // ============================================
@@ -579,6 +580,12 @@ function renderNav() {
           <button class="hidden md:flex p-2 text-on-surface-variant hover:text-primary hover:bg-surface-variant rounded-full transition-colors min-w-[48px] min-h-[48px] items-center justify-center" aria-label="Search products" onclick="openSearchDialog()">
             <span class="material-symbols-outlined" aria-hidden="true">search</span>
           </button>
+          ${authUser ? `
+          <button class="relative p-2 text-on-surface-variant hover:text-primary hover:bg-surface-variant rounded-full transition-colors min-w-[48px] min-h-[48px] flex items-center justify-center" onclick="openNotificationsPanel()" aria-label="Notifications (${state.unreadNotifications || 0} unread)">
+            <span class="material-symbols-outlined text-[24px]" aria-hidden="true">${(state.unreadNotifications || 0) > 0 ? "notifications_active" : "notifications"}</span>
+            ${(state.unreadNotifications || 0) > 0 ? `<span class="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-error text-[10px] font-bold text-on-error border border-surface">${state.unreadNotifications > 99 ? "99+" : state.unreadNotifications}</span>` : ""}
+          </button>
+          ` : ""}
           <button class="relative p-2 text-on-surface-variant hover:text-primary hover:bg-surface-variant rounded-full transition-colors min-w-[48px] min-h-[48px] flex items-center justify-center" onclick="navigateTo('wishlist')" aria-label="Wishlist (${wishlistCount} items)">
             <span class="material-symbols-outlined text-[24px]" aria-hidden="true" style="font-variation-settings: 'FILL' 1;">favorite</span>
             ${wishlistCount > 0 ? `<span class="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-error text-[10px] font-bold text-on-error border border-surface">${wishlistCount > 99 ? "99+" : wishlistCount}</span>` : ""}
@@ -3271,6 +3278,123 @@ function closeSearchDialog() {
   document.removeEventListener("keydown", searchEscHandler);
 }
 
+// ============================================
+// NOTIFICATIONS PANEL
+// ============================================
+let _notifPanelOpen = false;
+async function openNotificationsPanel() {
+  if (document.getElementById("notifPanel")) {
+    closeNotificationsPanel();
+    return;
+  }
+  _notifPanelOpen = true;
+  const panel = document.createElement("div");
+  panel.id = "notifPanel";
+  panel.className = "fixed top-16 right-2 md:right-4 z-[150] w-96 max-w-[calc(100vw-1rem)] bg-surface border border-outline-variant rounded-2xl shadow-2xl max-h-[70vh] flex flex-col animate-fade-in";
+  panel.innerHTML = `
+    <div class="p-4 border-b border-outline-variant flex items-center justify-between">
+      <h3 class="font-bold text-primary flex items-center gap-2">
+        <span class="material-symbols-outlined">notifications</span>
+        Notifications
+      </h3>
+      <div class="flex items-center gap-1">
+        <button onclick="markAllNotificationsRead()" class="text-xs text-primary hover:underline" title="Mark all as read">Mark all read</button>
+        <button onclick="closeNotificationsPanel()" class="text-on-surface-variant hover:text-on-surface p-1">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+    </div>
+    <div id="notifPanelList" class="flex-1 overflow-y-auto p-2">
+      <p class="text-center text-on-surface-variant py-8 text-sm">Loading...</p>
+    </div>
+  `;
+  document.body.appendChild(panel);
+  await loadNotificationsList();
+  // Close on outside click
+  setTimeout(() => {
+    const closeOnOutside = (e) => {
+      if (!panel.contains(e.target) && !e.target.closest('[aria-label*="Notifications"]')) {
+        closeNotificationsPanel();
+        document.removeEventListener("click", closeOnOutside);
+      }
+    };
+    document.addEventListener("click", closeOnOutside);
+  }, 100);
+}
+
+function closeNotificationsPanel() {
+  _notifPanelOpen = false;
+  document.getElementById("notifPanel")?.remove();
+}
+
+async function loadNotificationsList() {
+  const wrap = document.getElementById("notifPanelList");
+  if (!wrap) return;
+  try {
+    const data = await apiGet("/notifications");
+    const items = data.items || [];
+    if (items.length === 0) {
+      wrap.innerHTML = `<p class="text-center text-on-surface-variant py-8 text-sm">No notifications yet</p>`;
+      return;
+    }
+    wrap.innerHTML = items.map(n => `
+      <div class="p-3 rounded-lg mb-1 ${n.read_at ? 'bg-surface' : 'bg-primary-container/20'} hover:bg-surface-container-low cursor-pointer flex gap-2" onclick="handleNotificationClick(${n.id}, ${JSON.stringify(n.link || '').replace(/"/g, '&quot;')})">
+        <span class="material-symbols-outlined text-primary shrink-0 mt-0.5">${escapeHtml(n.icon || 'notifications')}</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-on-surface">${escapeHtml(n.title)}</p>
+          <p class="text-xs text-on-surface-variant line-clamp-2">${escapeHtml(n.body)}</p>
+          <p class="text-[10px] text-on-surface-variant mt-1">${timeAgo(new Date(n.created_at))}</p>
+        </div>
+        ${!n.read_at ? '<span class="w-2 h-2 rounded-full bg-primary shrink-0 mt-2"></span>' : ''}
+      </div>
+    `).join("");
+  } catch (e) {
+    wrap.innerHTML = `<p class="text-center text-error py-4 text-sm">Failed to load: ${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function handleNotificationClick(id, link) {
+  try { await apiPost(`/notifications/${id}/read`); } catch {}
+  if (link && link.includes("orders")) navigateTo("orders");
+  else if (link && link.includes("support")) { /* open support chat */ }
+  closeNotificationsPanel();
+}
+
+async function markAllNotificationsRead() {
+  try {
+    await apiPost("/notifications/read-all");
+    state.unreadNotifications = 0;
+    renderApp();
+    if (_notifPanelOpen) await loadNotificationsList();
+    toast("All notifications marked as read");
+  } catch (e) { toast("Failed: " + e.message); }
+}
+
+async function refreshNotificationsBadge() {
+  if (!state.authUser) {
+    state.unreadNotifications = 0;
+    return;
+  }
+  try {
+    const data = await apiGet("/notifications");
+    const newCount = data.unread || 0;
+    if (newCount !== state.unreadNotifications) {
+      state.unreadNotifications = newCount;
+      renderApp();
+    }
+  } catch {}
+}
+
+// Poll for new notifications every 30s
+let _notifPollTimer = null;
+function startNotificationsPolling() {
+  if (_notifPollTimer) return;
+  _notifPollTimer = setInterval(refreshNotificationsBadge, 30000);
+}
+function stopNotificationsPolling() {
+  if (_notifPollTimer) { clearInterval(_notifPollTimer); _notifPollTimer = null; }
+}
+
 function searchEscHandler(e) {
   if (e.key === "Escape") closeSearchDialog();
   // Cmd/Ctrl+K to open search
@@ -3551,6 +3675,9 @@ async function init() {
 
   // Initial render (with mock fallback immediately)
   handleHashChange();
+
+  // Start notifications polling
+  startNotificationsPolling();
 
   // Init Auth + backend sync
   try {

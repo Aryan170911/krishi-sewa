@@ -1666,6 +1666,80 @@ app.get("/api/reviews/:productId/can-review", async (req, res) => {
 });
 
 // ============================================
+// NOTIFICATIONS — in-app notification center
+// ============================================
+// List notifications for the logged-in user
+app.get("/api/notifications", async (req, res) => {
+  try {
+    const sess = getSession(req);
+    if (!sess) return res.status(401).json({ error: "Login required" });
+    if (!supabase) return res.json({ unread: 0, items: [] });
+    const { data, error } = await supabase.from("notifications")
+      .select("id, type, title, body, link, icon, read_at, created_at")
+      .eq("user_email", sess.email)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) return res.status(500).json({ error: error.message });
+    const unread = (data || []).filter(n => !n.read_at).length;
+    res.json({ unread, items: data || [] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Mark a single notification as read
+app.post("/api/notifications/:id/read", async (req, res) => {
+  try {
+    const sess = getSession(req);
+    if (!sess) return res.status(401).json({ error: "Login required" });
+    if (!supabase) return res.json({ ok: true });
+    await supabase.from("notifications").update({ read_at: new Date().toISOString() })
+      .eq("id", req.params.id).eq("user_email", sess.email);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Mark all as read
+app.post("/api/notifications/read-all", async (req, res) => {
+  try {
+    const sess = getSession(req);
+    if (!sess) return res.status(401).json({ error: "Login required" });
+    if (!supabase) return res.json({ ok: true });
+    await supabase.from("notifications").update({ read_at: new Date().toISOString() })
+      .eq("user_email", sess.email).is("read_at", null);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Delete a notification
+app.delete("/api/notifications/:id", async (req, res) => {
+  try {
+    const sess = getSession(req);
+    if (!sess) return res.status(401).json({ error: "Login required" });
+    if (!supabase) return res.json({ ok: true });
+    await supabase.from("notifications").update({ deleted_at: new Date().toISOString() })
+      .eq("id", req.params.id).eq("user_email", sess.email);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Create a notification (used internally or admin)
+app.post("/api/notifications", async (req, res) => {
+  try {
+    const sess = getSession(req);
+    if (!sess) return res.status(401).json({ error: "Login required" });
+    if (!supabase) return res.status(503).json({ error: "DB unavailable" });
+    const { title, body, type, link, icon } = req.body || {};
+    if (!title || !body) return res.status(400).json({ error: "title and body required" });
+    const { data, error } = await supabase.from("notifications").insert({
+      user_email: sess.email, type: type || "system", title, body,
+      link: link || null, icon: icon || "notifications"
+    }).select().single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(201).json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ============================================
 // API KEYS — programmatic admin access
 // ============================================
 app.get("/api/admin/api-keys", requireAdmin, async (req, res) => {

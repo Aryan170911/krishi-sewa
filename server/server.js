@@ -79,6 +79,24 @@ app.use((req, res, next) => {
   next();
 });
 
+// CSRF protection: require custom header on state-changing requests
+// Browsers won't send custom headers cross-origin without CORS preflight
+function csrfProtection(req, res, next) {
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
+  // Allow token-based admin auth (no cookies)
+  if (req.headers["x-admin-token"]) return next();
+  // Allow API key auth
+  if (req.headers["x-api-key"]) return next();
+  // Skip if no session (let auth middleware handle 401)
+  if (!req.headers.cookie) return next();
+  // Check for required custom header on authenticated state-changing requests
+  if (!req.headers["x-requested-with"] || req.headers["x-requested-with"] !== "XMLHttpRequest") {
+    return res.status(403).json({ error: "Missing CSRF token. Add 'X-Requested-With: XMLHttpRequest' header." });
+  }
+  next();
+}
+app.use("/api/", csrfProtection);
+
 // Rate limiting
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

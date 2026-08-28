@@ -93,7 +93,7 @@ async function apiPost(path, body, silent = false) {
   const effectiveBase = window.__krishi_api_base || API_BASE;
   const res = await fetch(`${effectiveBase}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
     credentials: "include",
     body: JSON.stringify(body)
   });
@@ -456,7 +456,7 @@ function saveCart() {
     // Fire and forget — server is source of truth
     fetch(`${API_BASE}/cart`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
       credentials: "include",
       body: JSON.stringify({ items: state.cart })
     }).catch(e => console.warn("saveCart sync failed:", e.message));
@@ -2873,7 +2873,7 @@ async function placeOrder() {
     try {
       await fetch(`${API_BASE}/cart`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
         credentials: "include",
         body: JSON.stringify({ items: state.cart })
       });
@@ -2887,7 +2887,7 @@ async function placeOrder() {
     showToast(`Order ${order.id} placed!`);
     // Clear local + server cart
     state.cart = [];
-    try { await fetch(`${API_BASE}/cart`, { method: "DELETE", credentials: "include" }); } catch {}
+    try { await fetch(`${API_BASE}/cart`, { method: "DELETE", headers: { "X-Requested-With": "XMLHttpRequest" }, credentials: "include" }); } catch {}
     renderApp();
     navigateTo('confirmation');
   } catch (e) {
@@ -3729,13 +3729,13 @@ function onUserTyping(isTyping = true) {
   if (userTypingTimer) clearTimeout(userTypingTimer);
   if (isTyping) {
     fetch(`${API_BASE}/support/chat/${supportState.chat.id}/typing`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
       credentials: "include", body: JSON.stringify({ isTyping: true })
     }).catch(() => {});
     userTypingTimer = setTimeout(() => onUserTyping(false), 5000);
   } else {
     fetch(`${API_BASE}/support/chat/${supportState.chat.id}/typing`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
       credentials: "include", body: JSON.stringify({ isTyping: false })
     }).catch(() => {});
   }
@@ -4119,6 +4119,7 @@ async function confirmDeleteAccount() {
   try {
     const r = await fetch(`${API_BASE}/auth/account`, {
       method: "DELETE",
+      headers: { "X-Requested-With": "XMLHttpRequest" },
       credentials: "include"
     });
     const d = await r.json();
@@ -4200,12 +4201,12 @@ async function savePreferences() {
 
 async function deleteAddress(id) {
   if (!confirm("Delete this address?")) return;
-  try { await fetch(`${API_BASE}/addresses/${id}`, { method: "DELETE", credentials: "include" }); loadProfileTab("addresses"); showToast("Address deleted"); }
+  try { await fetch(`${API_BASE}/addresses/${id}`, { method: "DELETE", headers: { "X-Requested-With": "XMLHttpRequest" }, credentials: "include" }); loadProfileTab("addresses"); showToast("Address deleted"); }
   catch (e) { showToast("Failed: " + e.message); }
 }
 
 async function removeFromWishlist(productId) {
-  try { await fetch(`${API_BASE}/wishlist/${productId}`, { method: "DELETE", credentials: "include" }); loadProfileTab("wishlist"); showToast("Removed"); }
+  try { await fetch(`${API_BASE}/wishlist/${productId}`, { method: "DELETE", headers: { "X-Requested-With": "XMLHttpRequest" }, credentials: "include" }); loadProfileTab("wishlist"); showToast("Removed"); }
   catch (e) { showToast("Failed: " + e.message); }
 }
 
@@ -4218,14 +4219,14 @@ async function addWishlistToCart(productId) {
     else state.cart.push({ id: p.id, name: p.name, price: p.price, image: p.image, quantity: 1 });
     saveCart();
     // Sync to server
-    fetch(`${API_BASE}/cart`, { method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ items: state.cart.map(c => ({ id: c.id, quantity: c.quantity, price: c.price, name: c.name, image: c.image })) }) }).catch(() => {});
+    fetch(`${API_BASE}/cart`, { method: "PUT", headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" }, credentials: "include", body: JSON.stringify({ items: state.cart.map(c => ({ id: c.id, quantity: c.quantity, price: c.price, name: c.name, image: c.image })) }) }).catch(() => {});
     showToast("Added to cart");
   } catch (e) { showToast("Failed: " + e.message); }
 }
 
 async function revokeSession(id) {
   if (!confirm("Revoke this session? The device will be logged out.")) return;
-  try { await fetch(`${API_BASE}/sessions/${id}`, { method: "DELETE", credentials: "include" }); loadProfileTab("sessions"); showToast("Session revoked"); }
+  try { await fetch(`${API_BASE}/sessions/${id}`, { method: "DELETE", headers: { "X-Requested-With": "XMLHttpRequest" }, credentials: "include" }); loadProfileTab("sessions"); showToast("Session revoked"); }
   catch (e) { showToast("Failed: " + e.message); }
 }
 
@@ -4357,7 +4358,7 @@ async function toggleWishlist(productId) {
     const list = await apiGet("/wishlist") || [];
     const has = list.find(x => x.product_id === productId);
     if (has) {
-      await fetch(`${API_BASE}/wishlist/${productId}`, { method: "DELETE", credentials: "include" });
+      await fetch(`${API_BASE}/wishlist/${productId}`, { method: "DELETE", headers: { "X-Requested-With": "XMLHttpRequest" }, credentials: "include" });
       showToast("Removed from wishlist");
     } else {
       await apiPost(`/wishlist/${productId}`, {}, true);

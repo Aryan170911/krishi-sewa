@@ -299,10 +299,9 @@ async function run() {
 
   await test("POST without X-Requested-With (CSRF) → soft check (no session passes)", async () => {
     // Without cookies, CSRF is bypassed (let auth middleware handle 401)
-    const cookieHeader = Object.entries(sessionCookies).map(([k, v]) => `${k}=${v}`).join("; ");
     const res = await fetch(`${API_BASE}/auth/logout`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(cookieHeader ? { Cookie: cookieHeader } : {}) }
+      headers: { "Content-Type": "application/json" }  // No X-Requested-With, no cookie
     });
     if (res.status === 403) throw new Error("Got 403, expected bypass for no-XMLHttpRequest when not strictly enforced");
   });

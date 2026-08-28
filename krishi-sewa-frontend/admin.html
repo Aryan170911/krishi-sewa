@@ -111,6 +111,9 @@ tailwind.config = {
         <span class="ml-auto text-xs text-on-surface-variant">Cancellations:</span>
         <button onclick="event.stopPropagation(); showPendingCancellationsModal();" class="text-xs bg-error text-on-error px-2 py-0.5 rounded-full font-bold hover:opacity-80" id="cancelBadgeBtn">0</button>
       </button>
+      <button data-tab="integrations" class="admin-tab flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-semibold text-on-surface-variant hover:bg-surface-variant">
+        <span class="material-symbols-outlined text-[20px]">webhook</span> Integrations
+      </button>
       <button data-tab="support" class="admin-tab flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-semibold text-on-surface-variant hover:bg-surface-variant">
         <span class="material-symbols-outlined text-[20px]">support_agent</span> Support
         <span id="supportUnreadBadge" class="ml-auto bg-error text-on-error text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1.5 flex items-center justify-center hidden"></span>
@@ -189,6 +192,44 @@ tailwind.config = {
         </div>
         <div id="ordersTableWrap" class="space-y-3">
           <!-- orders injected -->
+        </div>
+      </section>
+
+      <!-- Integrations (Webhooks + API Keys) -->
+      <section id="tab-integrations" class="admin-section hidden">
+        <h2 class="text-2xl font-bold text-primary mb-1">Integrations</h2>
+        <p class="text-on-surface-variant mb-6">Manage webhooks and API keys for programmatic access</p>
+
+        <!-- Webhooks -->
+        <div class="mb-8">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-bold text-primary flex items-center gap-2">
+              <span class="material-symbols-outlined">webhook</span>
+              Webhooks
+            </h3>
+            <button onclick="showAddWebhookModal()" class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1">
+              <span class="material-symbols-outlined text-[18px]">add</span> Add Webhook
+            </button>
+          </div>
+          <div id="webhooksList" class="space-y-2">
+            <p class="text-center text-on-surface-variant py-4">Loading...</p>
+          </div>
+        </div>
+
+        <!-- API Keys -->
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-bold text-primary flex items-center gap-2">
+              <span class="material-symbols-outlined">vpn_key</span>
+              API Keys
+            </h3>
+            <button onclick="showAddApiKeyModal()" class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1">
+              <span class="material-symbols-outlined text-[18px]">add</span> Generate Key
+            </button>
+          </div>
+          <div id="apiKeysList" class="space-y-2">
+            <p class="text-center text-on-surface-variant py-4">Loading...</p>
+          </div>
         </div>
       </section>
 

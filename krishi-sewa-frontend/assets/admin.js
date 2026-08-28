@@ -83,6 +83,7 @@ function switchTab(tab) {
   if (tab === "dashboard") loadStats();
   if (tab === "products") loadProducts();
   if (tab === "orders") loadOrders();
+  if (tab === "integrations") { loadWebhooks(); loadApiKeys(); }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -275,6 +276,192 @@ async function handleProductSubmit(e) {
 }
 
 // Orders
+// ============================================
+// INTEGRATIONS — Webhooks + API Keys
+// ============================================
+async function loadWebhooks() {
+  const wrap = document.getElementById("webhooksList");
+  if (!wrap) return;
+  wrap.innerHTML = `<p class="text-center text-on-surface-variant py-4">Loading...</p>`;
+  try {
+    const r = await fetch(`${API}/admin/webhooks`, { credentials: "include" });
+    if (!r.ok) { wrap.innerHTML = `<p class="text-error text-sm py-4">Failed (${r.status})</p>`; return; }
+    const hooks = await r.json();
+    if (hooks.length === 0) {
+      wrap.innerHTML = `<p class="text-sm text-on-surface-variant text-center py-4">No webhooks registered. Click "Add Webhook" to create one.</p>`;
+      return;
+    }
+    wrap.innerHTML = hooks.map(h => `
+      <div class="border border-outline-variant rounded-lg p-3 ${h.active ? '' : 'opacity-60'}">
+        <div class="flex items-center justify-between mb-1">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-mono truncate">${escapeHtml(h.url)}</p>
+            <p class="text-xs text-on-surface-variant">Events: ${h.events.map(e => `<span class="px-1.5 py-0.5 bg-primary-container/30 rounded mr-1">${e}</span>`).join("")}</p>
+          </div>
+          <div class="flex items-center gap-1 ml-2">
+            <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded ${h.active ? 'bg-primary text-on-primary' : 'bg-outline-variant text-on-surface'}">${h.active ? "Active" : "Disabled"}</span>
+            <button onclick="deleteWebhook('${h.id}')" class="text-error p-1 hover:bg-error-container rounded" title="Delete">
+              <span class="material-symbols-outlined text-[18px]">delete</span>
+            </button>
+          </div>
+        </div>
+        <p class="text-[10px] text-on-surface-variant mt-1">${h.last_triggered_at ? "Last fired: " + timeAgo(new Date(h.last_triggered_at)) : "Never fired"} ${h.failure_count > 0 ? `• ${h.failure_count} failures` : ""}</p>
+      </div>
+    `).join("");
+  } catch (e) { wrap.innerHTML = `<p class="text-error text-sm py-4">Failed: ${escapeHtml(e.message)}</p>`; }
+}
+
+async function deleteWebhook(id) {
+  if (!confirm("Delete this webhook?")) return;
+  try {
+    await fetch(`${API}/admin/webhooks/${id}`, { method: "DELETE", credentials: "include" });
+    toast("Webhook deleted");
+    loadWebhooks();
+  } catch (e) { toast("Failed: " + e.message); }
+}
+
+function showAddWebhookModal() {
+  const html = `
+    <div class="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center p-4" onclick="if(event.target===this) closeModal('addWebhookModal')">
+      <div class="bg-white rounded-2xl max-w-md w-full p-6" onclick="event.stopPropagation()">
+        <h3 class="font-bold text-lg text-primary mb-4 flex items-center gap-2"><span class="material-symbols-outlined">webhook</span> Add Webhook</h3>
+        <form onsubmit="submitWebhook(event)" class="space-y-3">
+          <div>
+            <label class="block text-sm font-semibold mb-1">URL</label>
+            <input id="webhookUrl" type="url" required placeholder="https://your-app.com/webhook" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1">Events</label>
+            <div class="grid grid-cols-2 gap-1 text-sm">
+              ${["order.created", "order.shipped", "order.delivered", "order.cancelled"].map(ev => `
+                <label class="flex items-center gap-1 p-1 border border-outline-variant rounded">
+                  <input type="checkbox" name="webhookEvent" value="${ev}" class="accent-primary">
+                  ${ev}
+                </label>
+              `).join("")}
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button type="button" onclick="closeModal('addWebhookModal')" class="flex-1 border border-outline-variant py-2 rounded-lg font-semibold">Cancel</button>
+            <button type="submit" class="flex-1 bg-primary text-on-primary py-2 rounded-lg font-semibold">Add</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  showModal("addWebhookModal", html);
+}
+
+async function submitWebhook(e) {
+  e.preventDefault();
+  const url = document.getElementById("webhookUrl")?.value;
+  const events = Array.from(document.querySelectorAll('[name="webhookEvent"]:checked')).map(cb => cb.value);
+  if (!url || events.length === 0) { toast("URL and at least 1 event required"); return; }
+  try {
+    const r = await fetch(`${API}/admin/webhooks`, {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest", ...getHeaders() },
+      credentials: "include", body: JSON.stringify({ url, events })
+    });
+    if (!r.ok) throw new Error("Failed");
+    toast("Webhook created");
+    closeModal("addWebhookModal");
+    loadWebhooks();
+  } catch (e) { toast("Failed: " + e.message); }
+}
+
+async function loadApiKeys() {
+  const wrap = document.getElementById("apiKeysList");
+  if (!wrap) return;
+  wrap.innerHTML = `<p class="text-center text-on-surface-variant py-4">Loading...</p>`;
+  try {
+    const r = await fetch(`${API}/admin/api-keys`, { credentials: "include" });
+    if (!r.ok) { wrap.innerHTML = `<p class="text-error text-sm py-4">Failed (${r.status})</p>`; return; }
+    const keys = await r.json();
+    if (keys.length === 0) {
+      wrap.innerHTML = `<p class="text-sm text-on-surface-variant text-center py-4">No API keys. Click "Generate Key" to create one.</p>`;
+      return;
+    }
+    wrap.innerHTML = keys.map(k => `
+      <div class="border border-outline-variant rounded-lg p-3 ${k.revoked_at ? 'opacity-60' : ''}">
+        <div class="flex items-center justify-between mb-1">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold">${escapeHtml(k.name)}</p>
+            <p class="text-xs font-mono text-on-surface-variant">${escapeHtml(k.key_prefix)}...</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded ${k.revoked_at ? 'bg-error text-on-error' : 'bg-primary text-on-primary'}">${k.revoked_at ? "Revoked" : (k.scope || "read")}</span>
+            ${!k.revoked_at ? `<button onclick="deleteApiKey('${k.id}')" class="text-error p-1 hover:bg-error-container rounded" title="Revoke">
+              <span class="material-symbols-outlined text-[18px]">delete</span>
+            </button>` : ""}
+          </div>
+        </div>
+        <p class="text-[10px] text-on-surface-variant">Last used: ${k.last_used_at ? timeAgo(new Date(k.last_used_at)) : "Never"} ${k.expires_at ? "• Expires " + new Date(k.expires_at).toLocaleDateString() : ""}</p>
+      </div>
+    `).join("");
+  } catch (e) { wrap.innerHTML = `<p class="text-error text-sm py-4">Failed: ${escapeHtml(e.message)}</p>`; }
+}
+
+async function deleteApiKey(id) {
+  if (!confirm("Revoke this API key? Apps using it will stop working.")) return;
+  try {
+    await fetch(`${API}/admin/api-keys/${id}`, { method: "DELETE", credentials: "include" });
+    toast("API key revoked");
+    loadApiKeys();
+  } catch (e) { toast("Failed: " + e.message); }
+}
+
+function showAddApiKeyModal() {
+  const html = `
+    <div class="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center p-4" onclick="if(event.target===this) closeModal('addApiKeyModal')">
+      <div class="bg-white rounded-2xl max-w-md w-full p-6" onclick="event.stopPropagation()">
+        <h3 class="font-bold text-lg text-primary mb-4 flex items-center gap-2"><span class="material-symbols-outlined">vpn_key</span> Generate API Key</h3>
+        <form onsubmit="submitApiKey(event)" class="space-y-3">
+          <div>
+            <label class="block text-sm font-semibold mb-1">Name</label>
+            <input id="apiKeyName" required placeholder="e.g. Mobile app" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1">Scope</label>
+            <select id="apiKeyScope" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white">
+              <option value="read">Read only</option>
+              <option value="write">Read + Write</option>
+              <option value="admin">Full admin</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1">Expires in (days, blank = never)</label>
+            <input id="apiKeyExpiry" type="number" min="1" placeholder="365" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none">
+          </div>
+          <div class="flex gap-2">
+            <button type="button" onclick="closeModal('addApiKeyModal')" class="flex-1 border border-outline-variant py-2 rounded-lg font-semibold">Cancel</button>
+            <button type="submit" class="flex-1 bg-primary text-on-primary py-2 rounded-lg font-semibold">Generate</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  showModal("addApiKeyModal", html);
+}
+
+async function submitApiKey(e) {
+  e.preventDefault();
+  const name = document.getElementById("apiKeyName")?.value;
+  const scope = document.getElementById("apiKeyScope")?.value;
+  const expiryInDays = parseInt(document.getElementById("apiKeyExpiry")?.value) || null;
+  try {
+    const r = await fetch(`${API}/admin/api-keys`, {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest", ...getHeaders() },
+      credentials: "include", body: JSON.stringify({ name, scope, expiresInDays })
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || "Failed");
+    closeModal("addApiKeyModal");
+    // Show key in alert (only chance to copy!)
+    prompt("API Key generated. SAVE IT NOW (won't be shown again):\n\n" + d.key, d.key);
+    loadApiKeys();
+  } catch (e) { toast("Failed: " + e.message); }
+}
+
 async function loadOrders() {
   try {
     const res = await fetch(`${API}/orders`, { headers: getHeaders() });

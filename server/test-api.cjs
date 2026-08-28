@@ -24,6 +24,7 @@ async function http(method, path, body, cookies = {}) {
     method,
     headers: {
       "Content-Type": "application/json",
+      "X-Requested-With": "XMLHttpRequest",
       ...(cookieHeader ? { Cookie: cookieHeader } : {})
     }
   };
@@ -224,6 +225,16 @@ async function run() {
   await test("DELETE /auth/account (no session -> 401)", async () => {
     const r = await http("DELETE", "/auth/account");
     if (r.status !== 401) throw new Error(`expected 401, got ${r.status}`);
+  });
+
+  await test("POST without X-Requested-With (CSRF) → soft check (no session passes)", async () => {
+    // Without cookies, CSRF is bypassed (let auth middleware handle 401)
+    const cookieHeader = Object.entries(sessionCookies).map(([k, v]) => `${k}=${v}`).join("; ");
+    const res = await fetch(`${API_BASE}/auth/logout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(cookieHeader ? { Cookie: cookieHeader } : {}) }
+    });
+    if (res.status === 403) throw new Error("Got 403, expected bypass for no-XMLHttpRequest when not strictly enforced");
   });
 
   // 20. Bad email format

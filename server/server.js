@@ -974,7 +974,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       }).eq("email", email);
     }
     issueSession(res, email, user.name);
-    res.json({ ok: true, user: { email: user.email, name: user.name } });
+    res.json({ ok: true, user: { email: user.email, name: user.name, email_verified: user.email_verified !== false } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post("/api/auth/forgot", loginLimiter, async (req, res) => {
@@ -1009,7 +1009,7 @@ app.post("/api/auth/reset-password", loginLimiter, async (req, res) => {
     await updateUser(email, { password_hash: hashPassword(newPassword) });
     otpStore.delete(email);
     issueSession(res, email, user.name);
-    res.json({ ok: true, user: { email: user.email, name: user.name } });
+    res.json({ ok: true, user: { email: user.email, name: user.name, email_verified: user.email_verified !== false } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post("/api/auth/resend-code", loginLimiter, async (req, res) => {
